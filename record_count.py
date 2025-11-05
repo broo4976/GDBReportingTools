@@ -11,6 +11,7 @@ ArcGIS Pro 3.5.2
 Python 3.11.11
 
 Updates:
+11/4/2025:      Fix for tables; changed MakeFeatureLayer to MakeTableView.
 
 """
 
@@ -22,6 +23,7 @@ from openpyxl.utils import get_column_letter
 # Overwrite existing output
 arcpy.env.overwriteOutput = 1
 
+
 def log_it(message):
     print(message)
     arcpy.AddMessage(message)
@@ -30,14 +32,18 @@ def log_it(message):
 def autofit_column_widths(ws):
     for col in ws.columns:
         max_length = 0
-        column = get_column_letter(col[0].column) # Get column letter from the first cell in the column
+        column = get_column_letter(
+            col[0].column
+        )  # Get column letter from the first cell in the column
         for cell in col:
             try:
                 if len(str(cell.value)) > max_length:
                     max_length = len(str(cell.value))
-            except TypeError: # Handle cases where cell.value might be None or not easily convertible to string
+            except (
+                TypeError
+            ):  # Handle cases where cell.value might be None or not easily convertible to string
                 pass
-        adjusted_width = (max_length + 2) # Add some padding
+        adjusted_width = max_length + 2  # Add some padding
         ws.column_dimensions[column].width = adjusted_width
 
 
@@ -75,7 +81,7 @@ for fds in fds_list:
     else:
         log_it(f"Processing feature dataset: {fds}")
         ds_list = arcpy.ListFeatureClasses(feature_dataset=fds)
-        
+
     for ds in ds_list:
         log_it(f"Processing dataset: {ds}")
         # Get record count
@@ -97,7 +103,7 @@ for fds in fds_list:
                 subtype_name = subtype_prop["Name"]
                 # Get count of records for subtype
                 where_clause = f"{subtype_fld} = {i}"
-                arcpy.management.MakeFeatureLayer(ds, "ds_lyr", where_clause)
+                arcpy.management.MakeTableView(ds, "ds_lyr", where_clause)
                 subtype_count = int(arcpy.management.GetCount("ds_lyr").getOutput(0))
                 subtype_list.append((subtype_name, subtype_count))
         # Add details to data list
@@ -110,16 +116,16 @@ if records:
     row = 2
     for val in records:
         if val == "":
-            row+=1
+            row += 1
         else:
-            for i in range(0, len(val)-1):
-                ws.cell(row=row, column=i+1, value=val[i])
-            row+=1
+            for i in range(0, len(val) - 1):
+                ws.cell(row=row, column=i + 1, value=val[i])
+            row += 1
             if val[-1]:
                 for subtype in val[-1]:
                     ws.cell(row=row, column=5, value=subtype[0])
                     ws.cell(row=row, column=6, value=subtype[1])
-                    row+=1
+                    row += 1
 
     # Update formatting for record count columns
     for cell in ws["D"]:
@@ -135,11 +141,10 @@ if records:
     ws.freeze_panes = "A2"
 
     # Apply autofit to all columns
-    autofit_column_widths(ws)    
+    autofit_column_widths(ws)
 
     # Save excel
     wb.save(out_xls)
 
     # Start file
     os.startfile(out_xls)
-

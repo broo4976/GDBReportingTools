@@ -11,6 +11,10 @@ ArcGIS Pro 3.5.2
 Python 3.11.11
 
 Updates:
+11/12/2025:     Error thrown when attempting to write vcs
+                to Excel because code was trying to write
+                object.  Changed to code to use vcs name
+                property.
 
 """
 
@@ -22,6 +26,7 @@ from openpyxl.utils import get_column_letter
 # Overwrite existing output
 arcpy.env.overwriteOutput = 1
 
+
 def log_it(message):
     print(message)
     arcpy.AddMessage(message)
@@ -30,14 +35,18 @@ def log_it(message):
 def autofit_column_widths(ws):
     for col in ws.columns:
         max_length = 0
-        column = get_column_letter(col[0].column) # Get column letter from the first cell in the column
+        column = get_column_letter(
+            col[0].column
+        )  # Get column letter from the first cell in the column
         for cell in col:
             try:
                 if len(str(cell.value)) > max_length:
                     max_length = len(str(cell.value))
-            except TypeError: # Handle cases where cell.value might be None or not easily convertible to string
+            except (
+                TypeError
+            ):  # Handle cases where cell.value might be None or not easily convertible to string
                 pass
-        adjusted_width = (max_length + 2) # Add some padding
+        adjusted_width = max_length + 2  # Add some padding
         ws.column_dimensions[column].width = adjusted_width
 
 
@@ -80,21 +89,21 @@ for fds in fds_list:
         fds = "<standalone>"
         ds_list = arcpy.ListFeatureClasses() + arcpy.ListTables()
     else:
-        log_it(f"Processing feature dataset: {fds}") 
+        log_it(f"Processing feature dataset: {fds}")
         ds_list = arcpy.ListFeatureClasses(feature_dataset=fds)
-        
+
     for ds in ds_list:
         log_it(f"Processing dataset: {ds}")
         # Describe dataset to get properties
         desc = arcpy.Describe(ds)
-        
+
         # Get spatial reference properties
         try:
             spatial_ref = desc.spatialReference
             sr_name = spatial_ref.name
             coord_system = spatial_ref.type
             wkid = spatial_ref.factoryCode
-            vertical_cs = spatial_ref.VCS
+            vertical_cs = spatial_ref.VCS.name
             if coord_system == "Geographic":
                 linear_units = "N/A"
             else:
@@ -110,10 +119,12 @@ for fds in fds_list:
             linear_units = ""
             vertical_cs = ""
             pass
-            
+
         # Get GlobalID field info
         has_globalid = desc.HasGlobalID
-        globalid_fld = [fld for fld in arcpy.ListFields(ds) if fld.name.lower() == "globalid"]
+        globalid_fld = [
+            fld for fld in arcpy.ListFields(ds) if fld.name.lower() == "globalid"
+        ]
         if globalid_fld:
             globalid_type = globalid_fld[0].type
             globalid_fld = globalid_fld[0].name
@@ -133,10 +144,24 @@ for fds in fds_list:
             createddate_fld = ""
             editor_fld = ""
             editdate_fld = ""
-        
+
         # Add details to data list
-        val_tuple = (fds, ds, str(has_globalid), globalid_fld, globalid_type, str(has_editor_tracking), creator_fld, createddate_fld,
-                     editor_fld, editdate_fld, coord_system, wkid, linear_units, vertical_cs)
+        val_tuple = (
+            fds,
+            ds,
+            str(has_globalid),
+            globalid_fld,
+            globalid_type,
+            str(has_editor_tracking),
+            creator_fld,
+            createddate_fld,
+            editor_fld,
+            editdate_fld,
+            coord_system,
+            wkid,
+            linear_units,
+            vertical_cs,
+        )
         records.append(val_tuple)
     records.append("")
 
@@ -145,11 +170,11 @@ if records:
     row = 2
     for val in records:
         if val == "":
-            row+=1
+            row += 1
         else:
             for i in range(0, len(val)):
-                ws.cell(row=row, column=i+1, value=val[i])
-            row+=1
+                ws.cell(row=row, column=i + 1, value=val[i])
+            row += 1
 
     # Bold and freeze first row
     bold_font = openpyxl.styles.Font(bold=True)
@@ -162,6 +187,6 @@ if records:
 
     # Save excel
     wb.save(out_xls)
-    
+
     # Start file
     os.startfile(out_xls)

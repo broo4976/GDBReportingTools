@@ -15,6 +15,11 @@ Updates:
                 Fixed wording in subtype compare (was printing 'Domain' rather than 'Subtype'
                 in output Excel file).
                 Swapped base/test for subtype property in fields.
+12/11/2025:     Added HasZ and HasM as properties to compare on feature classes.
+12/11/2025:     Added parameter to allow user to skip comparison between some properties.
+12/12/2025:     Added item (feature class, table, domain, etc) to for missing/additional to
+                Base/Test column in output spreadsheet.
+
 """
 
 from lxml import etree
@@ -161,7 +166,14 @@ def compare_domains(tree_base, tree_test):
         return (domain_miss, domain_diff, domain_add)
 
 
-def get_dataset_properties(tree, ds_type):
+def get_dataset_properties(
+    tree,
+    ds_type,
+    ignore_ds_alias,
+    ignore_fld_alias,
+    ignore_hasm,
+    ignore_hasz,
+):
     dataset_list = []
     for elem in tree.iter("DataElement"):
         if elem.attrib.values()[0] == ds_type:
@@ -177,12 +189,29 @@ def get_dataset_properties(tree, ds_type):
                     ds_prop.tag
                     in [
                         "Name",
-                        "AliasName",
                         "Versioned",
                         "CanVersion",
                         "ConfigurationKeyword",
                         "ShapeType",
                     ]
+                    and ds_prop.getparent().tag == "DataElement"
+                ):
+                    dataset_dict[ds_prop.tag] = ds_prop.text
+                elif (
+                    ds_prop.tag == "AliasName"
+                    and not ignore_ds_alias
+                    and ds_prop.getparent().tag == "DataElement"
+                ):
+                    dataset_dict[ds_prop.tag] = ds_prop.text
+                elif (
+                    ds_prop.tag == "HasM"
+                    and not ignore_hasm
+                    and ds_prop.getparent().tag == "DataElement"
+                ):
+                    dataset_dict[ds_prop.tag] = ds_prop.text
+                elif (
+                    ds_prop.tag == "HasZ"
+                    and not ignore_hasz
                     and ds_prop.getparent().tag == "DataElement"
                 ):
                     dataset_dict[ds_prop.tag] = ds_prop.text
@@ -209,13 +238,14 @@ def get_dataset_properties(tree, ds_type):
                             "Precision",
                             "Scale",
                             "Required",
-                            "AliasName",
                             "Editable",
                             "DefaultValue",
                         ]:
                             flds_dict[fld_prop.tag] = fld_prop.text
                         elif fld_prop.tag == "Name":
                             flds_dict[fld_prop.tag] = fld_prop.text.lower()
+                        elif fld_prop.tag == "AliasName" and not ignore_fld_alias:
+                            flds_dict[fld_prop.tag] = fld_prop.text
                         elif fld_prop.tag == "Domain":
                             domain_data = fld_prop.getchildren()
                             for domain_prop in domain_data:
@@ -237,9 +267,32 @@ def get_dataset_properties(tree, ds_type):
     return dataset_list
 
 
-def compare_datasets(tree_base, tree_test, ds_type, name):
-    ds_list_base = get_dataset_properties(tree_base, ds_type)
-    ds_list_test = get_dataset_properties(tree_test, ds_type)
+def compare_datasets(
+    tree_base,
+    tree_test,
+    ds_type,
+    name,
+    ignore_ds_alias,
+    ignore_fld_alias,
+    ignore_hasm=True,
+    ignore_hasz=True,
+):
+    ds_list_base = get_dataset_properties(
+        tree_base,
+        ds_type,
+        ignore_ds_alias,
+        ignore_fld_alias,
+        ignore_hasm,
+        ignore_hasz,
+    )
+    ds_list_test = get_dataset_properties(
+        tree_test,
+        ds_type,
+        ignore_ds_alias,
+        ignore_fld_alias,
+        ignore_hasm,
+        ignore_hasz,
+    )
     if ds_list_base == ds_list_test:
         return ([], {}, [])
     else:
@@ -846,6 +899,7 @@ def write_results_to_xls(
         else:
             ws.cell(row=row, column=1).value = item
         ws.cell(row=row, column=2).value = "Missing {}".format(item_type)
+        ws.cell(row=row, column=3).value = ws.cell(row=row, column=1).value
         row += 1
 
     for key, val_list in diff_dict.items():
@@ -872,6 +926,7 @@ def write_results_to_xls(
         else:
             ws.cell(row=row, column=1).value = item
         ws.cell(row=row, column=2).value = "Additional {}".format(item_type)
+        ws.cell(row=row, column=4).value = ws.cell(row=row, column=1).value
         row += 1
 
 
@@ -886,6 +941,36 @@ xml_file_test = arcpy.GetParameterAsText(1)
 
 # Output xls file
 out_xls = arcpy.GetParameterAsText(2)
+
+# Optional properties to ignore
+ignore_str = arcpy.GetParameterAsText(3)
+
+# Create dictionary to store ignore values and bools
+ignore_dict = {
+    "Feature Class/Table Alias": False,
+    "Field Alias": False,
+    "Has M": False,
+    "Has Z": False,
+    "Domains": False,
+    "Topology": False,
+}
+
+# Get value table values
+if ignore_str:
+    ignore_list = ignore_str.split(";")
+    for i in ignore_list:
+        i = i.replace("'", "")
+        if i in ignore_dict.keys():
+            ignore_dict[i] = True
+        else:
+            arcpy.AddWarning(f"{i} Ignore Property unknown")
+
+ignore_ds_alias = ignore_dict["Feature Class/Table Alias"]
+ignore_fld_alias = ignore_dict["Field Alias"]
+ignore_hasm = ignore_dict["Has M"]
+ignore_hasz = ignore_dict["Has Z"]
+ignore_domains = ignore_dict["Domains"]
+ignore_topology = ignore_dict["Topology"]
 
 # Parse xml files
 tree_base = etree.parse(xml_file_base)
@@ -913,7 +998,14 @@ if fds_miss or fds_diff or fds_add:
 # COMPARE FEATURE CLASSES
 log_it("Comparing feature classes")
 fc_miss, fc_diff, fc_add = compare_datasets(
-    tree_base, tree_test, "esri:DEFeatureClass", "Feature Class"
+    tree_base,
+    tree_test,
+    "esri:DEFeatureClass",
+    "Feature Class",
+    ignore_ds_alias,
+    ignore_fld_alias,
+    ignore_hasm,
+    ignore_hasz,
 )
 if fc_miss or fc_diff or fc_add:
     save_wb = True
@@ -925,7 +1017,13 @@ if fc_miss or fc_diff or fc_add:
 # COMPARE TABLES
 log_it("Comparing tables")
 tbl_miss, tbl_diff, tbl_add = compare_datasets(
-    tree_base, tree_test, "esri:DETable", "Table"
+    tree_base,
+    tree_test,
+    "esri:DETable",
+    "Table",
+    ignore_ds_alias,
+    ignore_fld_alias,
+    ignore_domains,
 )
 if tbl_miss or tbl_diff or tbl_add:
     save_wb = True
@@ -950,26 +1048,28 @@ if rc_miss or rc_diff or rc_add:
     )
 
 
-# COMPARE DOMAINS
-log_it("Comparing domains")
-domain_miss, domain_diff, domain_add = compare_domains(tree_base, tree_test)
-if domain_miss or domain_diff or domain_add:
-    save_wb = True
-    write_results_to_xls(
-        wb, "Domains", "Domain", "DomainName", domain_miss, domain_diff, domain_add
-    )
+if not ignore_domains:
+    # COMPARE DOMAINS
+    log_it("Comparing domains")
+    domain_miss, domain_diff, domain_add = compare_domains(tree_base, tree_test)
+    if domain_miss or domain_diff or domain_add:
+        save_wb = True
+        write_results_to_xls(
+            wb, "Domains", "Domain", "DomainName", domain_miss, domain_diff, domain_add
+        )
 
 
-# COMPARE TOPOLOGIES
-log_it("Comparing topologies")
-topo_miss, topo_diff, topo_add = compare_topo(
-    tree_base, tree_test, "esri:DETopology", "Topology"
-)
-if topo_miss or topo_diff or topo_add:
-    save_wb = True
-    write_results_to_xls(
-        wb, "Topologies", "Topology", "Name", topo_miss, topo_diff, topo_add
+if not ignore_topology:
+    # COMPARE TOPOLOGIES
+    log_it("Comparing topologies")
+    topo_miss, topo_diff, topo_add = compare_topo(
+        tree_base, tree_test, "esri:DETopology", "Topology"
     )
+    if topo_miss or topo_diff or topo_add:
+        save_wb = True
+        write_results_to_xls(
+            wb, "Topologies", "Topology", "Name", topo_miss, topo_diff, topo_add
+        )
 
 
 # COMPARE ATTRIBUTE RULES

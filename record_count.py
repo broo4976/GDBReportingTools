@@ -12,6 +12,8 @@ Python 3.11.11
 
 Updates:
 11/4/2025:      Fix for tables; changed MakeFeatureLayer to MakeTableView.
+12/1/2025:      Sorted feature classes and tables alphabetically.
+12/1/2025:      Added "Subtype Code" to output Excel spreadsheet.
 
 """
 
@@ -58,8 +60,9 @@ ws["A1"] = "Feature Dataset"
 ws["B1"] = "Feature Class/Table"
 ws["C1"] = "Shape Type"
 ws["D1"] = "Record Count"
-ws["E1"] = "Subtype Name"
-ws["F1"] = "Subtype Count"
+ws["E1"] = "Subtype Code"
+ws["F1"] = "Subtype Name"
+ws["G1"] = "Subtype Count"
 
 
 # Set workspace environment
@@ -77,10 +80,15 @@ for fds in fds_list:
     if fds == "":
         log_it(f"Processing stand-alone datasets")
         fds = "<standalone>"
-        ds_list = arcpy.ListFeatureClasses() + arcpy.ListTables()
+        fc_list = arcpy.ListFeatureClasses()
+        tbl_list = arcpy.ListTables()
+        fc_list.sort()
+        tbl_list.sort()
+        ds_list = fc_list + tbl_list
     else:
         log_it(f"Processing feature dataset: {fds}")
         ds_list = arcpy.ListFeatureClasses(feature_dataset=fds)
+        ds_list.sort()
 
     for ds in ds_list:
         log_it(f"Processing dataset: {ds}")
@@ -101,11 +109,12 @@ for fds in fds_list:
         for i, subtype_prop in subtype_dict.items():
             if i > 0:
                 subtype_name = subtype_prop["Name"]
+                subtype_code = i
                 # Get count of records for subtype
                 where_clause = f"{subtype_fld} = {i}"
                 arcpy.management.MakeTableView(ds, "ds_lyr", where_clause)
                 subtype_count = int(arcpy.management.GetCount("ds_lyr").getOutput(0))
-                subtype_list.append((subtype_name, subtype_count))
+                subtype_list.append((subtype_code, subtype_name, subtype_count))
         # Add details to data list
         val_tuple = (fds, ds, shape_type, record_count, subtype_list)
         records.append(val_tuple)
@@ -125,6 +134,7 @@ if records:
                 for subtype in val[-1]:
                     ws.cell(row=row, column=5, value=subtype[0])
                     ws.cell(row=row, column=6, value=subtype[1])
+                    ws.cell(row=row, column=7, value=subtype[2])
                     row += 1
 
     # Update formatting for record count columns

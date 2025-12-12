@@ -15,6 +15,7 @@ Updates:
                 to Excel because code was trying to write
                 object.  Changed to code to use vcs name
                 property.
+12/1/2025:      Sorted feature classes and tables alphabetically.
 
 """
 
@@ -87,10 +88,15 @@ for fds in fds_list:
     if fds == "":
         log_it(f"Processing stand-alone datasets")
         fds = "<standalone>"
-        ds_list = arcpy.ListFeatureClasses() + arcpy.ListTables()
+        fc_list = arcpy.ListFeatureClasses()
+        tbl_list = arcpy.ListTables()
+        fc_list.sort()
+        tbl_list.sort()
+        ds_list = fc_list + tbl_list
     else:
         log_it(f"Processing feature dataset: {fds}")
         ds_list = arcpy.ListFeatureClasses(feature_dataset=fds)
+        ds_list.sort()
 
     for ds in ds_list:
         log_it(f"Processing dataset: {ds}")

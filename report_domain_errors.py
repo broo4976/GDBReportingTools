@@ -224,9 +224,10 @@ if report_dict:
                 merge_end = row
                 row += 1
 
-            # Merge invalid values cells in columns A and B
+            # Merge invalid values cells in columns A, B, and C
             ws.merge_cells(f"A{merge_start}:A{merge_end}")
             ws.merge_cells(f"B{merge_start}:B{merge_end}")
+            ws.merge_cells(f"C{merge_start}:C{merge_end}")
             
 
         # Update formatting for record count columns
@@ -239,17 +240,17 @@ if report_dict:
             for cell in row:
                 cell.alignment = Alignment(horizontal="center", vertical="center")
 
-        # Center count data in columns A and B
-        for row in ws.iter_rows(min_row=5, min_col=1, max_col=2):
-            for cell in row:
-                cell.alignment = Alignment(vertical="center")
-
         # Set width for column C
         ws.column_dimensions["C"].width = 40
 
         # Word wrap column with valid vaues
         for cell in ws["C"]:
             cell.alignment = Alignment(wrapText=True)
+
+        # Center count data in columns A, B, and C
+        for row in ws.iter_rows(min_row=5, min_col=1, max_col=3):
+            for cell in row:
+                cell.alignment = Alignment(vertical="center")
 
         # Apply autofit to all columns
         autofit_column_widths(ws)

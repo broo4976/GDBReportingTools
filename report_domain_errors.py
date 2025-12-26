@@ -30,6 +30,7 @@ def log_it(message):
     print(message)
     arcpy.AddMessage(message)
 
+
 def autofit_column_widths(ws):
     for col in ws.columns:
         max_length = 0
@@ -80,7 +81,9 @@ for ds in ds_list:
 
 # Loop through each fc/table in dictionary
 log_it("Looping through each feature/class table")
-report_dict = {} # {ds name: {feature count: 0, domain fields: [{field: '', domain type: '', valid_values: '', invalid: [{invalid value: '', count: 0}]}]}
+report_dict = (
+    {}
+)  # {ds name: {feature count: 0, domain fields: [{field: '', domain type: '', valid_values: '', invalid: [{invalid value: '', count: 0}]}]}
 for fds, ds_list in ds_dict.items():
     if fds != "stand_alone":
         log_it(f"Processing feature classes from feature dataset: {fds}")
@@ -90,7 +93,7 @@ for fds, ds_list in ds_dict.items():
         log_it(f"Processing stand-alone feature classes and tables from workspace")
         # Set workspace to gdb
         arcpy.env.workspace = in_ws
-        
+
     # Loop through fcs in fds
     for ds in ds_list:
         log_it(ds)
@@ -98,7 +101,7 @@ for fds, ds_list in ds_dict.items():
         name = name.replace("stand_alone/", "")
         # Get feature count
         feat_count = arcpy.management.GetCount(ds).getOutput(0)
-        
+
         # Get fields with domains
         domain_flds = [fld for fld in arcpy.ListFields(ds) if fld.domain]
         # Loop through domain fields to get domain properties
@@ -116,7 +119,9 @@ for fds, ds_list in ds_dict.items():
                 valid_values = tuple(domain.codedValues.keys())
                 where = f"{fld.name} NOT IN {valid_values}"
                 unique_list = []
-                with arcpy.da.SearchCursor(ds, [fld.name], where, sql_clause=("DISTINCT", None)) as cur:
+                with arcpy.da.SearchCursor(
+                    ds, [fld.name], where, sql_clause=("DISTINCT", None)
+                ) as cur:
                     for row in cur:
                         unique_list.append(row[0])
                 # Update valid values to string so it can be added to excel
@@ -134,7 +139,7 @@ for fds, ds_list in ds_dict.items():
                             where = f"{fld.name} = {val}"
 
                         # Handle fc vs table
-                        if arcpy.Describe(ds).dataType == "FeatureClass":   
+                        if arcpy.Describe(ds).dataType == "FeatureClass":
                             arcpy.management.MakeFeatureLayer(ds, "i", where)
                         else:
                             arcpy.management.MakeTableView(ds, "i", where)
@@ -150,7 +155,7 @@ for fds, ds_list in ds_dict.items():
                 # Find where value is less than min range
                 where = f"{fld.name} < {min_range}"
                 # Handle fc vs table
-                if arcpy.Describe(ds).dataType == "FeatureClass":   
+                if arcpy.Describe(ds).dataType == "FeatureClass":
                     arcpy.management.MakeFeatureLayer(ds, "i", where)
                 else:
                     arcpy.management.MakeTableView(ds, "i", where)
@@ -163,7 +168,7 @@ for fds, ds_list in ds_dict.items():
                 # Find where value is greater than min range
                 where = f"{fld.name} > {max_range}"
                 # Handle fc vs table
-                if arcpy.Describe(ds).dataType == "FeatureClass":   
+                if arcpy.Describe(ds).dataType == "FeatureClass":
                     arcpy.management.MakeFeatureLayer(ds, "i", where)
                 else:
                     arcpy.management.MakeTableView(ds, "i", where)
@@ -175,15 +180,22 @@ for fds, ds_list in ds_dict.items():
 
             # Only add info if invalid values were found
             if invalid_list:
-                domain_info = {"field": fld.name, "domain_type": domain_type,
-                               "valid_values": valid_values, "invalid": invalid_list}
+                domain_info = {
+                    "field": fld.name,
+                    "domain_type": domain_type,
+                    "valid_values": valid_values,
+                    "invalid": invalid_list,
+                }
                 fld_list.append(domain_info)
 
         # Only add info if fields with invalid values were found
         if fld_list:
             # Sort fields alphabetically
             sorted_fld_list = sorted(fld_list, key=lambda x: x["field"])
-            report_dict[name] = {"feature_count": feat_count, "domain_fields": sorted_fld_list}
+            report_dict[name] = {
+                "feature_count": feat_count,
+                "domain_fields": sorted_fld_list,
+            }
 
 if report_dict:
     # Create new workbook
@@ -228,7 +240,6 @@ if report_dict:
             ws.merge_cells(f"A{merge_start}:A{merge_end}")
             ws.merge_cells(f"B{merge_start}:B{merge_end}")
             ws.merge_cells(f"C{merge_start}:C{merge_end}")
-            
 
         # Update formatting for record count columns
         ws["B2"].number_format = "#,##0"

@@ -256,10 +256,10 @@ if report_dict:
 
         # Word wrap column with valid vaues
         for cell in ws["C"]:
-            cell.alignment = Alignment(wrapText=True)
+            cell.alignment = Alignment(wrapText=True, vertical="center")
 
-        # Center count data in columns A, B, and C
-        for row in ws.iter_rows(min_row=5, min_col=1, max_col=3):
+        # Center count data in columns A and B
+        for row in ws.iter_rows(min_row=5, min_col=1, max_col=2):
             for cell in row:
                 cell.alignment = Alignment(vertical="center")
 

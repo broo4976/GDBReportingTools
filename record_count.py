@@ -14,6 +14,7 @@ Updates:
 11/4/2025:      Fix for tables; changed MakeFeatureLayer to MakeTableView.
 12/1/2025:      Sorted feature classes and tables alphabetically.
 12/1/2025:      Added "Subtype Code" to output Excel spreadsheet.
+3/12/2026:      Enhancement to include Asset Type codes, names, and counts.
 
 """
 
@@ -52,6 +53,7 @@ def autofit_column_widths(ws):
 # Tool inputs
 in_ws = arcpy.GetParameterAsText(0)
 out_xls = arcpy.GetParameterAsText(1)
+include_assettypes = arcpy.GetParameter(2)
 
 # Create new workbook and define header
 wb = openpyxl.Workbook()
@@ -63,6 +65,10 @@ ws["D1"] = "Record Count"
 ws["E1"] = "Subtype Code"
 ws["F1"] = "Subtype Name"
 ws["G1"] = "Subtype Count"
+if include_assettypes:
+    ws["H1"] = "Asset Type Code"
+    ws["I1"] = "Asset Type Name"
+    ws["J1"] = "Asset Type Count"
 
 
 # Set workspace environment
@@ -114,7 +120,29 @@ for fds in fds_list:
                 where_clause = f"{subtype_fld} = {i}"
                 arcpy.management.MakeTableView(ds, "ds_lyr", where_clause)
                 subtype_count = int(arcpy.management.GetCount("ds_lyr").getOutput(0))
-                subtype_list.append((subtype_code, subtype_name, subtype_count))
+                if not include_assettypes:
+                    subtype_list.append((subtype_code, subtype_name, subtype_count))
+                else:
+                    if "ASSETTYPE" in subtype_prop["FieldValues"].keys():
+                        assettype_list = []
+                        domain = subtype_prop["FieldValues"]["ASSETTYPE"][1]
+                        if domain.domainType == "CodedValue":
+                            for at_code, at_name in domain.codedValues.items():
+                                # Get count of records for subtype
+                                where_clause = (
+                                    f"{subtype_fld} = {i} AND AssetType = {at_code}"
+                                )
+                                arcpy.management.MakeTableView(
+                                    ds, "ds_lyr", where_clause
+                                )
+                                at_count = int(
+                                    arcpy.management.GetCount("ds_lyr").getOutput(0)
+                                )
+                                assettype_list.append((at_code, at_name, at_count))
+                    subtype_list.append(
+                        (subtype_code, subtype_name, subtype_count, assettype_list)
+                    )
+
         # Add details to data list
         val_tuple = (fds, ds, shape_type, record_count, subtype_list)
         records.append(val_tuple)
@@ -136,13 +164,24 @@ if records:
                     ws.cell(row=row, column=6, value=subtype[1])
                     ws.cell(row=row, column=7, value=subtype[2])
                     row += 1
+                    if include_assettypes:
+                        assettype_list = subtype[3]
+                        for at_values in assettype_list:
+                            ws.cell(row=row, column=8, value=at_values[0])
+                            ws.cell(row=row, column=9, value=at_values[1])
+                            ws.cell(row=row, column=10, value=at_values[2])
+                            row += 1
 
     # Update formatting for record count columns
     for cell in ws["D"]:
         cell.number_format = "#,##0"
 
-    for cell in ws["F"]:
+    for cell in ws["G"]:
         cell.number_format = "#,##0"
+
+    if include_assettypes:
+        for cell in ws["J"]:
+            cell.number_format = "#,##0"
 
     # Bold and freeze first row
     bold_font = openpyxl.styles.Font(bold=True)

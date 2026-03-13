@@ -123,8 +123,8 @@ for fds in fds_list:
                 if not include_assettypes:
                     subtype_list.append((subtype_code, subtype_name, subtype_count))
                 else:
+                    assettype_list = []
                     if "ASSETTYPE" in subtype_prop["FieldValues"].keys():
-                        assettype_list = []
                         domain = subtype_prop["FieldValues"]["ASSETTYPE"][1]
                         if domain.domainType == "CodedValue":
                             for at_code, at_name in domain.codedValues.items():

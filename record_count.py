@@ -15,6 +15,11 @@ Updates:
 12/1/2025:      Sorted feature classes and tables alphabetically.
 12/1/2025:      Added "Subtype Code" to output Excel spreadsheet.
 3/12/2026:      Enhancement to include Asset Type codes, names, and counts.
+3/17/2026:      Updated code to use pandas to get counts from dataframe - this
+                update significantly reduced script run-time in the test case
+                from 1 hr 45 min to under 30 seconds.
+3/17/2026:      Added code to handle invalid and null subtypes, as well as
+                invalid asset types.
 
 """
 
@@ -22,6 +27,8 @@ import arcpy
 import os
 import openpyxl
 from openpyxl.utils import get_column_letter
+from openpyxl.styles import Alignment
+import pandas as pd
 
 # Overwrite existing output
 arcpy.env.overwriteOutput = 1
@@ -54,6 +61,9 @@ def autofit_column_widths(ws):
 in_ws = arcpy.GetParameterAsText(0)
 out_xls = arcpy.GetParameterAsText(1)
 include_assettypes = arcpy.GetParameter(2)
+
+# Set null integer value
+null_int_val = -9999
 
 # Create new workbook and define header
 wb = openpyxl.Workbook()
@@ -98,8 +108,7 @@ for fds in fds_list:
 
     for ds in ds_list:
         log_it(f"Processing dataset: {ds}")
-        # Get record count
-        record_count = int(arcpy.management.GetCount(ds).getOutput(0))
+
         # Describe dataset to get properties
         desc = arcpy.Describe(ds)
         # Get shape type
@@ -108,18 +117,37 @@ for fds in fds_list:
         except:
             shape_type = ""
             pass
+
         # Get subtype info
         subtype_fld = desc.subtypeFieldName
-        subtype_dict = arcpy.da.ListSubtypes(ds)
+
+        # Convert to pandas dataframe
+        if subtype_fld:
+            flds_list = [
+                fld.name
+                for fld in arcpy.ListFields(ds)
+                if fld.name.upper() in (subtype_fld.upper(), "ASSETTYPE")
+            ]
+        else:
+            flds_list = [
+                fld.name for fld in arcpy.ListFields(ds) if fld.type == "String"
+            ]
+        numpy_array = arcpy.da.FeatureClassToNumPyArray(
+            ds, flds_list, null_value=null_int_val
+        )
+        df = pd.DataFrame(numpy_array)
+
+        # Get record count
+        record_count = len(df)
+
         subtype_list = []
-        for i, subtype_prop in subtype_dict.items():
-            if i > 0:
+        sorted_subtype_list = []
+        if subtype_fld:
+            subtype_dict = arcpy.da.ListSubtypes(ds)
+            for subtype_code, subtype_prop in subtype_dict.items():
                 subtype_name = subtype_prop["Name"]
-                subtype_code = i
                 # Get count of records for subtype
-                where_clause = f"{subtype_fld} = {i}"
-                arcpy.management.MakeTableView(ds, "ds_lyr", where_clause)
-                subtype_count = int(arcpy.management.GetCount("ds_lyr").getOutput(0))
+                subtype_count = len(df[df[subtype_fld] == subtype_code])
                 if not include_assettypes:
                     subtype_list.append((subtype_code, subtype_name, subtype_count))
                 else:
@@ -129,22 +157,87 @@ for fds in fds_list:
                         if domain.domainType == "CodedValue":
                             for at_code, at_name in domain.codedValues.items():
                                 # Get count of records for subtype
-                                where_clause = (
-                                    f"{subtype_fld} = {i} AND AssetType = {at_code}"
+                                at_count = len(
+                                    df[
+                                        (df[subtype_fld] == subtype_code)
+                                        & (df["ASSETTYPE"] == at_code)
+                                    ]
                                 )
-                                arcpy.management.MakeTableView(
-                                    ds, "ds_lyr", where_clause
-                                )
-                                at_count = int(
-                                    arcpy.management.GetCount("ds_lyr").getOutput(0)
-                                )
+                                assettype_list.append((at_code, at_name, at_count))
+
+                            # Get invalid asset types
+                            all_at = list(domain.codedValues.keys())
+                            invalid_df = df[
+                                (df[subtype_fld] == subtype_code)
+                                & (~df["ASSETTYPE"].isin(all_at))
+                            ]
+                            invalid_dict = (
+                                invalid_df["ASSETTYPE"].value_counts().to_dict()
+                            )
+                            for at_code, at_count in invalid_dict.items():
+                                at_name = "<Invalid Value>"
                                 assettype_list.append((at_code, at_name, at_count))
                     subtype_list.append(
                         (subtype_code, subtype_name, subtype_count, assettype_list)
                     )
 
+            # Get record count of values that are not subtypes
+            all_subtypes = list(subtype_dict.keys())
+            invalid_df = df[~df[subtype_fld].isin(all_subtypes)]
+            invalid_dict = invalid_df[subtype_fld].value_counts().to_dict()
+            for subtype_code, subtype_count in invalid_dict.items():
+                subtype_name = "<Invalid Value>"
+                if subtype_code == null_int_val:
+                    subtype_code = 99999999  # Need to make value number so results can be sorted on subtype code
+                    subtype_name = "<Null>"
+                if not include_assettypes:
+                    subtype_list.append((subtype_code, subtype_name, subtype_count))
+                else:
+                    assettype_list = []
+                    sorted_assettype_list = []
+                    if "ASSETTYPE" in subtype_prop["FieldValues"].keys():
+                        domain = subtype_prop["FieldValues"]["ASSETTYPE"][1]
+                        if domain.domainType == "CodedValue":
+                            for at_code, at_name in domain.codedValues.items():
+                                # Get count of records for subtype
+                                at_count = len(
+                                    df[
+                                        (df[subtype_fld] == subtype_code)
+                                        & (df["ASSETTYPE"] == at_code)
+                                    ]
+                                )
+                                assettype_list.append((at_code, at_name, at_count))
+
+                            # Get invalid asset types
+                            all_at = list(domain.codedValues.keys())
+                            invalid_df = df[
+                                (df[subtype_fld] == subtype_code)
+                                & (~df["ASSETTYPE"].isin(all_at))
+                            ]
+                            invalid_dict = (
+                                invalid_df["ASSETTYPE"].value_counts().to_dict()
+                            )
+                            for at_code, at_count in invalid_dict.items():
+                                at_name = "<Invalid Value>"
+                                assettype_list.append((at_code, at_name, at_count))
+                                # Sort on asset type code
+                                sorted_assettype_list = sorted(
+                                    assettype_list, key=lambda x: x[0]
+                                )
+                    subtype_list.append(
+                        (
+                            subtype_code,
+                            subtype_name,
+                            subtype_count,
+                            sorted_assettype_list,
+                        )
+                    )
+
+            # Sort on subtype code
+            sorted_subtype_list = sorted(subtype_list, key=lambda x: x[0])
+
         # Add details to data list
-        val_tuple = (fds, ds, shape_type, record_count, subtype_list)
+        val_tuple = (fds, ds, shape_type, record_count, sorted_subtype_list)
         records.append(val_tuple)
     records.append("")
 
@@ -160,7 +253,13 @@ if records:
             row += 1
             if val[-1]:
                 for subtype in val[-1]:
-                    ws.cell(row=row, column=5, value=subtype[0])
+                    if subtype[0] != 99999999:
+                        ws.cell(row=row, column=5, value=subtype[0])
+                    else:
+                        # Value 99999999 was used to sort by subtype code
+                        # because the value had to be an int for sorting
+                        # but want the code to actually show as Null
+                        ws.cell(row=row, column=5, value="Null")
                     ws.cell(row=row, column=6, value=subtype[1])
                     ws.cell(row=row, column=7, value=subtype[2])
                     row += 1
@@ -182,6 +281,15 @@ if records:
     if include_assettypes:
         for cell in ws["J"]:
             cell.number_format = "#,##0"
+
+    # Center code fields
+    for row in ws.iter_rows(min_row=1, min_col=5, max_col=5):
+        for cell in row:
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    for row in ws.iter_rows(min_row=1, min_col=8, max_col=8):
+        for cell in row:
+            cell.alignment = Alignment(horizontal="center", vertical="center")
 
     # Bold and freeze first row
     bold_font = openpyxl.styles.Font(bold=True)

@@ -19,6 +19,7 @@ Updates:
 12/11/2025:     Added parameter to allow user to skip comparison between some properties.
 12/12/2025:     Added item (feature class, table, domain, etc) to for missing/additional to
                 Base/Test column in output spreadsheet.
+3/19/2026:      Fixed logical error (typo) in condition for compare domains function.
 
 """
 
@@ -136,7 +137,7 @@ def compare_domains(tree_base, tree_test):
                             )
                             else ""
                         )
-                        if base_diff != "" and test_diff == "":
+                        if base_diff != "" and test_diff != "":
                             adj = "additional and missing"
                             base_diff = swap_key_value(base_diff)
                             test_diff = swap_key_value(test_diff)

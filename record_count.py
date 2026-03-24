@@ -20,6 +20,8 @@ Updates:
                 from 1 hr 45 min to under 30 seconds.
 3/17/2026:      Added code to handle invalid and null subtypes, as well as
                 invalid asset types.
+3/24/2026:      Fix for case of dataframe column names by standardizing to
+                upper case.
 
 """
 
@@ -136,6 +138,8 @@ for fds in fds_list:
             ds, flds_list, null_value=null_int_val
         )
         df = pd.DataFrame(numpy_array)
+        # Standardize column case to upper case
+        df.columns = df.columns.str.upper()
 
         # Get record count
         record_count = len(df)
@@ -147,7 +151,7 @@ for fds in fds_list:
             for subtype_code, subtype_prop in subtype_dict.items():
                 subtype_name = subtype_prop["Name"]
                 # Get count of records for subtype
-                subtype_count = len(df[df[subtype_fld] == subtype_code])
+                subtype_count = len(df[df[subtype_fld.upper()] == subtype_code])
                 if not include_assettypes:
                     subtype_list.append((subtype_code, subtype_name, subtype_count))
                 else:
@@ -159,7 +163,7 @@ for fds in fds_list:
                                 # Get count of records for subtype
                                 at_count = len(
                                     df[
-                                        (df[subtype_fld] == subtype_code)
+                                        (df[subtype_fld.upper()] == subtype_code)
                                         & (df["ASSETTYPE"] == at_code)
                                     ]
                                 )
@@ -168,7 +172,7 @@ for fds in fds_list:
                             # Get invalid asset types
                             all_at = list(domain.codedValues.keys())
                             invalid_df = df[
-                                (df[subtype_fld] == subtype_code)
+                                (df[subtype_fld.upper()] == subtype_code)
                                 & (~df["ASSETTYPE"].isin(all_at))
                             ]
                             invalid_dict = (
@@ -183,8 +187,8 @@ for fds in fds_list:
 
             # Get record count of values that are not subtypes
             all_subtypes = list(subtype_dict.keys())
-            invalid_df = df[~df[subtype_fld].isin(all_subtypes)]
-            invalid_dict = invalid_df[subtype_fld].value_counts().to_dict()
+            invalid_df = df[~df[subtype_fld.upper()].isin(all_subtypes)]
+            invalid_dict = invalid_df[subtype_fld.upper()].value_counts().to_dict()
             for subtype_code, subtype_count in invalid_dict.items():
                 subtype_name = "<Invalid Value>"
                 if subtype_code == null_int_val:
@@ -202,7 +206,7 @@ for fds in fds_list:
                                 # Get count of records for subtype
                                 at_count = len(
                                     df[
-                                        (df[subtype_fld] == subtype_code)
+                                        (df[subtype_fld.upper()] == subtype_code)
                                         & (df["ASSETTYPE"] == at_code)
                                     ]
                                 )
@@ -211,7 +215,7 @@ for fds in fds_list:
                             # Get invalid asset types
                             all_at = list(domain.codedValues.keys())
                             invalid_df = df[
-                                (df[subtype_fld] == subtype_code)
+                                (df[subtype_fld.upper()] == subtype_code)
                                 & (~df["ASSETTYPE"].isin(all_at))
                             ]
                             invalid_dict = (

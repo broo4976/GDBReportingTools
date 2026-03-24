@@ -22,6 +22,8 @@ Updates:
                 invalid asset types.
 3/24/2026:      Fix for case of dataframe column names by standardizing to
                 upper case.
+3/24/2026:      Fixes for non-UN gdbs including subtype field definition and
+                field types used when converting feature classes to numpy arrays.
 
 """
 
@@ -121,10 +123,10 @@ for fds in fds_list:
             pass
 
         # Get subtype info
-        subtype_fld = desc.subtypeFieldName
-
-        # Convert to pandas dataframe
-        if subtype_fld:
+        subtype_fld = None
+        if desc.subtypeFieldName:
+            subtype_fld = desc.subtypeFieldName
+            # Convert to pandas dataframe
             flds_list = [
                 fld.name
                 for fld in arcpy.ListFields(ds)
@@ -132,7 +134,10 @@ for fds in fds_list:
             ]
         else:
             flds_list = [
-                fld.name for fld in arcpy.ListFields(ds) if fld.type == "String"
+                fld.name
+                for fld in arcpy.ListFields(ds)
+                if fld.type
+                in ["String", "OID", "Integer", "SmallInteger", "BigInteger", "Double"]
             ]
         numpy_array = arcpy.da.FeatureClassToNumPyArray(
             ds, flds_list, null_value=null_int_val

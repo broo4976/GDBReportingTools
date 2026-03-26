@@ -24,6 +24,11 @@ Updates:
                 upper case.
 3/24/2026:      Fixes for non-UN gdbs including subtype field definition and
                 field types used when converting feature classes to numpy arrays.
+3/26/2026:      Removed faulty logic to report invalid asset types of invalid
+                subtypes.
+3/26/2026:      Update to make ASSETTYPE key in subtype dictionary case-insensitive,
+                as a customer database was found to have an asset type field
+                that was all-lower case.
 
 """
 
@@ -161,8 +166,12 @@ for fds in fds_list:
                     subtype_list.append((subtype_code, subtype_name, subtype_count))
                 else:
                     assettype_list = []
-                    if "ASSETTYPE" in subtype_prop["FieldValues"].keys():
-                        domain = subtype_prop["FieldValues"]["ASSETTYPE"][1]
+                    fld_val_dict = {
+                        key.upper(): value
+                        for key, value in subtype_prop["FieldValues"].items()
+                    }
+                    if "ASSETTYPE" in fld_val_dict.keys():
+                        domain = fld_val_dict["ASSETTYPE"][1]
                         if domain.domainType == "CodedValue":
                             for at_code, at_name in domain.codedValues.items():
                                 # Get count of records for subtype
@@ -195,52 +204,13 @@ for fds in fds_list:
             invalid_df = df[~df[subtype_fld.upper()].isin(all_subtypes)]
             invalid_dict = invalid_df[subtype_fld.upper()].value_counts().to_dict()
             for subtype_code, subtype_count in invalid_dict.items():
+                # Get subtype
                 subtype_name = "<Invalid Value>"
                 if subtype_code == null_int_val:
                     subtype_code = 99999999  # Need to make value number so results can be sorted on subtype code
                     subtype_name = "<Null>"
-                if not include_assettypes:
-                    subtype_list.append((subtype_code, subtype_name, subtype_count))
-                else:
-                    assettype_list = []
-                    sorted_assettype_list = []
-                    if "ASSETTYPE" in subtype_prop["FieldValues"].keys():
-                        domain = subtype_prop["FieldValues"]["ASSETTYPE"][1]
-                        if domain.domainType == "CodedValue":
-                            for at_code, at_name in domain.codedValues.items():
-                                # Get count of records for subtype
-                                at_count = len(
-                                    df[
-                                        (df[subtype_fld.upper()] == subtype_code)
-                                        & (df["ASSETTYPE"] == at_code)
-                                    ]
-                                )
-                                assettype_list.append((at_code, at_name, at_count))
 
-                            # Get invalid asset types
-                            all_at = list(domain.codedValues.keys())
-                            invalid_df = df[
-                                (df[subtype_fld.upper()] == subtype_code)
-                                & (~df["ASSETTYPE"].isin(all_at))
-                            ]
-                            invalid_dict = (
-                                invalid_df["ASSETTYPE"].value_counts().to_dict()
-                            )
-                            for at_code, at_count in invalid_dict.items():
-                                at_name = "<Invalid Value>"
-                                assettype_list.append((at_code, at_name, at_count))
-                                # Sort on asset type code
-                                sorted_assettype_list = sorted(
-                                    assettype_list, key=lambda x: x[0]
-                                )
-                    subtype_list.append(
-                        (
-                            subtype_code,
-                            subtype_name,
-                            subtype_count,
-                            sorted_assettype_list,
-                        )
-                    )
+                subtype_list.append((subtype_code, subtype_name, subtype_count))
 
             # Sort on subtype code
             sorted_subtype_list = sorted(subtype_list, key=lambda x: x[0])

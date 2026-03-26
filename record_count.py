@@ -210,7 +210,10 @@ for fds in fds_list:
                     subtype_code = 99999999  # Need to make value number so results can be sorted on subtype code
                     subtype_name = "<Null>"
 
-                subtype_list.append((subtype_code, subtype_name, subtype_count))
+                if not include_assettypes:
+                    subtype_list.append((subtype_code, subtype_name, subtype_count))
+                else:
+                    subtype_list.append((subtype_code, subtype_name, subtype_count, []))
 
             # Sort on subtype code
             sorted_subtype_list = sorted(subtype_list, key=lambda x: x[0])

@@ -11,6 +11,8 @@ ArcGIS Pro 3.5.2
 Python 3.11.11
 
 Updates:
+3/30/2026:      Fix to check empty string (non-null) values
+                in string fields.
 
 """
 
@@ -21,6 +23,7 @@ from openpyxl.styles.numbers import FORMAT_PERCENTAGE, FORMAT_PERCENTAGE_00
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import PatternFill, Font
 from openpyxl.formatting.rule import ColorScaleRule
+
 ##import warnings
 
 # Overwrite existing output
@@ -28,6 +31,7 @@ arcpy.env.overwriteOutput = 1
 
 # Suppress all UserWarnings from the openpyxl module
 ##warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
+
 
 def log_it(message):
     print(message)
@@ -37,14 +41,18 @@ def log_it(message):
 def autofit_column_widths(ws):
     for col in ws.columns:
         max_length = 0
-        column = get_column_letter(col[0].column) # Get column letter from the first cell in the column
+        column = get_column_letter(
+            col[0].column
+        )  # Get column letter from the first cell in the column
         for cell in col:
             try:
                 if len(str(cell.value)) > max_length:
                     max_length = len(str(cell.value))
-            except TypeError: # Handle cases where cell.value might be None or not easily convertible to string
+            except (
+                TypeError
+            ):  # Handle cases where cell.value might be None or not easily convertible to string
                 pass
-        adjusted_width = (max_length * 1.05) # Add some padding
+        adjusted_width = max_length * 1.05  # Add some padding
         ws.column_dimensions[column].width = adjusted_width
 
 
@@ -71,16 +79,22 @@ for fds in fds_list:
     if fds == "":
         log_it(f"Processing stand-alone datasets")
         fds = "<standalone>"
-        fc_list = [fc for fc in arcpy.ListFeatureClasses() if not fc.lower().startswith("gdb_")]
+        fc_list = [
+            fc for fc in arcpy.ListFeatureClasses() if not fc.lower().startswith("gdb_")
+        ]
         fc_list.sort()
         t_list = [t for t in arcpy.ListTables() if not t.lower().startswith("gdb_")]
         t_list.sort()
         ds_list = fc_list + t_list
     else:
         log_it(f"Processing feature dataset: {fds}")
-        ds_list = [fc for fc in arcpy.ListFeatureClasses(feature_dataset=fds) if not fc.lower().startswith("gdb_")]
+        ds_list = [
+            fc
+            for fc in arcpy.ListFeatureClasses(feature_dataset=fds)
+            if not fc.lower().startswith("gdb_")
+        ]
         ds_list.sort()
-        
+
     for ds in ds_list:
         log_it(f"Processing dataset: {ds}")
         # Create new worksheet
@@ -102,21 +116,23 @@ for fds in fds_list:
 
         # Initialize start row
         row = 2
-        
+
         # Get record count
         record_count = int(arcpy.management.GetCount(ds).getOutput(0))
         # Get field info
         flds_list = [fld for fld in arcpy.ListFields(ds)]
         for fld in flds_list:
-            if fld.type == "":
-                where_clause = f"{fld.name} IS NOT NULL OR {fld.name} <> '' OR {fld.name} <> ' '"
+            if fld.type == "String":
+                where_clause = (
+                    f"{fld.name} IS NOT NULL OR {fld.name} <> '' OR {fld.name} <> ' '"
+                )
             else:
                 where_clause = f"{fld.name} IS NOT NULL"
             # Query data to get field counts
             arcpy.management.MakeTableView(ds, "tv", where_clause)
             fld_count = int(arcpy.management.GetCount("tv").getOutput(0))
             if record_count > 0:
-                perc = float(fld_count/record_count)
+                perc = float(fld_count / record_count)
             else:
                 perc = 0
 
@@ -129,9 +145,9 @@ for fds in fds_list:
             ws.cell(row=row, column=6, value=fld.domain)
             ws.cell(row=row, column=7, value=fld_count)
             ws.cell(row=row, column=8, value=perc)
-            
+
             # Update row
-            row+=1
+            row += 1
 
         # Bold and freeze first row
         bold_font = openpyxl.styles.Font(bold=True)
@@ -152,18 +168,24 @@ for fds in fds_list:
                 cell.number_format = FORMAT_PERCENTAGE_00
 
         # Conditional formatting on the percentage field
-        rule = ColorScaleRule(start_type="percentile", start_value=10, start_color="f8696b",
-        mid_type="percentile", mid_value=50, mid_color="FFEF9C",
-        end_type="percentile", end_value=90, end_color="63BE7B")
+        rule = ColorScaleRule(
+            start_type="percentile",
+            start_value=10,
+            start_color="f8696b",
+            mid_type="percentile",
+            mid_value=50,
+            mid_color="FFEF9C",
+            end_type="percentile",
+            end_value=90,
+            end_color="63BE7B",
+        )
         ws.conditional_formatting.add(f"H2:H{row}", rule)
 
 # Sort sheets alphabetically
 wb._sheets.sort(key=lambda ws: ws.title)
-            
+
 # Save excel
 wb.save(out_xls)
 
 # Start file
 os.startfile(out_xls)
-            
-        

@@ -13,11 +13,15 @@ Python 3.11.11
 Updates:
 3/30/2026:      Fix to check empty string (non-null) values
                 in string fields.
+3/30/2026:      Improved script efficiency and decreased run-time
+                by converting datasets to pandas dataframes to
+                get record counts.
 
 """
 
 import arcpy
 import os
+import pandas as pd
 import openpyxl
 from openpyxl.styles.numbers import FORMAT_PERCENTAGE, FORMAT_PERCENTAGE_00
 from openpyxl.utils import get_column_letter
@@ -59,6 +63,9 @@ def autofit_column_widths(ws):
 # Tool inputs
 in_ws = arcpy.GetParameterAsText(0)
 out_xls = arcpy.GetParameterAsText(1)
+
+# Set null integer value
+null_int_val = -9999
 
 # Create new workbook and define header
 wb = openpyxl.Workbook()
@@ -117,20 +124,27 @@ for fds in fds_list:
         # Initialize start row
         row = 2
 
+        # Convert dataset to pandas dataframe
+        flds_list = [fld for fld in arcpy.ListFields(ds) if not fld.required]
+        fld_names = [fld.name for fld in flds_list]
+        numpy_array = arcpy.da.FeatureClassToNumPyArray(
+            ds, fld_names, null_value=null_int_val
+        )
+        df = pd.DataFrame(numpy_array)
+
         # Get record count
-        record_count = int(arcpy.management.GetCount(ds).getOutput(0))
+        record_count = len(df)
         # Get field info
-        flds_list = [fld for fld in arcpy.ListFields(ds)]
         for fld in flds_list:
             if fld.type == "String":
-                where_clause = (
-                    f"{fld.name} IS NOT NULL OR {fld.name} <> '' OR {fld.name} <> ' '"
+                fld_count = len(
+                    df[
+                        (df[fld.name] == str(null_int_val))
+                        | (df[fld.name].strip() == "")
+                    ]
                 )
             else:
-                where_clause = f"{fld.name} IS NOT NULL"
-            # Query data to get field counts
-            arcpy.management.MakeTableView(ds, "tv", where_clause)
-            fld_count = int(arcpy.management.GetCount("tv").getOutput(0))
+                fld_count = len(df[df[fld.name] == null_int_val])
             if record_count > 0:
                 perc = float(fld_count / record_count)
             else:

@@ -29,6 +29,8 @@ Updates:
 3/26/2026:      Update to make ASSETTYPE key in subtype dictionary case-insensitive,
                 as a customer database was found to have an asset type field
                 that was all-lower case.
+4/8/2026:       Added try/except to logic so script continues to process datasets
+                even if one fails.
 
 """
 

@@ -38,14 +38,20 @@ import openpyxl
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment
 import pandas as pd
+import traceback
 
 # Overwrite existing output
 arcpy.env.overwriteOutput = 1
 
 
-def log_it(message):
+def log_it(message, level=0):
     print(message)
-    arcpy.AddMessage(message)
+    if level == 0:
+        arcpy.AddMessage(message)
+    elif level == 1:
+        arcpy.AddWarning(message)
+    else:
+        arcpy.AddError(message)
 
 
 def autofit_column_widths(ws):
@@ -116,112 +122,125 @@ for fds in fds_list:
         ds_list.sort()
 
     for ds in ds_list:
-        log_it(f"Processing dataset: {ds}")
-
-        # Describe dataset to get properties
-        desc = arcpy.Describe(ds)
-        # Get shape type
         try:
-            shape_type = desc.shapeType
-        except:
-            shape_type = ""
-            pass
+            log_it(f"Processing dataset: {ds}")
 
-        # Get subtype info
-        subtype_fld = None
-        if desc.subtypeFieldName:
-            subtype_fld = desc.subtypeFieldName
-            # Convert to pandas dataframe
-            flds_list = [
-                fld.name
-                for fld in arcpy.ListFields(ds)
-                if fld.name.upper() in (subtype_fld.upper(), "ASSETTYPE")
-            ]
-        else:
-            flds_list = [
-                fld.name
-                for fld in arcpy.ListFields(ds)
-                if fld.type
-                in ["String", "OID", "Integer", "SmallInteger", "BigInteger", "Double"]
-            ]
-        numpy_array = arcpy.da.FeatureClassToNumPyArray(
-            ds, flds_list, null_value=null_int_val
-        )
-        df = pd.DataFrame(numpy_array)
-        # Standardize column case to upper case
-        df.columns = df.columns.str.upper()
+            # Describe dataset to get properties
+            desc = arcpy.Describe(ds)
+            # Get shape type
+            try:
+                shape_type = desc.shapeType
+            except:
+                shape_type = ""
+                pass
 
-        # Get record count
-        record_count = len(df)
+            # Get subtype info
+            subtype_fld = None
+            if desc.subtypeFieldName:
+                subtype_fld = desc.subtypeFieldName
+                # Convert to pandas dataframe
+                flds_list = [
+                    fld.name
+                    for fld in arcpy.ListFields(ds)
+                    if fld.name.upper() in (subtype_fld.upper(), "ASSETTYPE")
+                ]
+            else:
+                flds_list = [
+                    fld.name
+                    for fld in arcpy.ListFields(ds)
+                    if fld.type
+                    in [
+                        "String",
+                        "OID",
+                        "Integer",
+                        "SmallInteger",
+                        "BigInteger",
+                        "Double",
+                    ]
+                ]
+            numpy_array = arcpy.da.FeatureClassToNumPyArray(
+                ds, flds_list, null_value=null_int_val
+            )
+            df = pd.DataFrame(numpy_array)
+            # Standardize column case to upper case
+            df.columns = df.columns.str.upper()
 
-        subtype_list = []
-        sorted_subtype_list = []
-        if subtype_fld:
-            subtype_dict = arcpy.da.ListSubtypes(ds)
-            for subtype_code, subtype_prop in subtype_dict.items():
-                subtype_name = subtype_prop["Name"]
-                # Get count of records for subtype
-                subtype_count = len(df[df[subtype_fld.upper()] == subtype_code])
-                if not include_assettypes:
-                    subtype_list.append((subtype_code, subtype_name, subtype_count))
-                else:
-                    assettype_list = []
-                    fld_val_dict = {
-                        key.upper(): value
-                        for key, value in subtype_prop["FieldValues"].items()
-                    }
-                    if "ASSETTYPE" in fld_val_dict.keys():
-                        domain = fld_val_dict["ASSETTYPE"][1]
-                        if domain.domainType == "CodedValue":
-                            for at_code, at_name in domain.codedValues.items():
-                                # Get count of records for subtype
-                                at_count = len(
-                                    df[
-                                        (df[subtype_fld.upper()] == subtype_code)
-                                        & (df["ASSETTYPE"] == at_code)
-                                    ]
+            # Get record count
+            record_count = len(df)
+
+            subtype_list = []
+            sorted_subtype_list = []
+            if subtype_fld:
+                subtype_dict = arcpy.da.ListSubtypes(ds)
+                for subtype_code, subtype_prop in subtype_dict.items():
+                    subtype_name = subtype_prop["Name"]
+                    # Get count of records for subtype
+                    subtype_count = len(df[df[subtype_fld.upper()] == subtype_code])
+                    if not include_assettypes:
+                        subtype_list.append((subtype_code, subtype_name, subtype_count))
+                    else:
+                        assettype_list = []
+                        fld_val_dict = {
+                            key.upper(): value
+                            for key, value in subtype_prop["FieldValues"].items()
+                        }
+                        if "ASSETTYPE" in fld_val_dict.keys():
+                            domain = fld_val_dict["ASSETTYPE"][1]
+                            if domain.domainType == "CodedValue":
+                                for at_code, at_name in domain.codedValues.items():
+                                    # Get count of records for subtype
+                                    at_count = len(
+                                        df[
+                                            (df[subtype_fld.upper()] == subtype_code)
+                                            & (df["ASSETTYPE"] == at_code)
+                                        ]
+                                    )
+                                    assettype_list.append((at_code, at_name, at_count))
+
+                                # Get invalid asset types
+                                all_at = list(domain.codedValues.keys())
+                                invalid_df = df[
+                                    (df[subtype_fld.upper()] == subtype_code)
+                                    & (~df["ASSETTYPE"].isin(all_at))
+                                ]
+                                invalid_dict = (
+                                    invalid_df["ASSETTYPE"].value_counts().to_dict()
                                 )
-                                assettype_list.append((at_code, at_name, at_count))
+                                for at_code, at_count in invalid_dict.items():
+                                    at_name = "<Invalid Value>"
+                                    assettype_list.append((at_code, at_name, at_count))
+                        subtype_list.append(
+                            (subtype_code, subtype_name, subtype_count, assettype_list)
+                        )
 
-                            # Get invalid asset types
-                            all_at = list(domain.codedValues.keys())
-                            invalid_df = df[
-                                (df[subtype_fld.upper()] == subtype_code)
-                                & (~df["ASSETTYPE"].isin(all_at))
-                            ]
-                            invalid_dict = (
-                                invalid_df["ASSETTYPE"].value_counts().to_dict()
-                            )
-                            for at_code, at_count in invalid_dict.items():
-                                at_name = "<Invalid Value>"
-                                assettype_list.append((at_code, at_name, at_count))
-                    subtype_list.append(
-                        (subtype_code, subtype_name, subtype_count, assettype_list)
-                    )
+                # Get record count of values that are not subtypes
+                all_subtypes = list(subtype_dict.keys())
+                invalid_df = df[~df[subtype_fld.upper()].isin(all_subtypes)]
+                invalid_dict = invalid_df[subtype_fld.upper()].value_counts().to_dict()
+                for subtype_code, subtype_count in invalid_dict.items():
+                    # Get subtype
+                    subtype_name = "<Invalid Value>"
+                    if subtype_code == null_int_val:
+                        subtype_code = 99999999  # Need to make value number so results can be sorted on subtype code
+                        subtype_name = "<Null>"
 
-            # Get record count of values that are not subtypes
-            all_subtypes = list(subtype_dict.keys())
-            invalid_df = df[~df[subtype_fld.upper()].isin(all_subtypes)]
-            invalid_dict = invalid_df[subtype_fld.upper()].value_counts().to_dict()
-            for subtype_code, subtype_count in invalid_dict.items():
-                # Get subtype
-                subtype_name = "<Invalid Value>"
-                if subtype_code == null_int_val:
-                    subtype_code = 99999999  # Need to make value number so results can be sorted on subtype code
-                    subtype_name = "<Null>"
+                    if not include_assettypes:
+                        subtype_list.append((subtype_code, subtype_name, subtype_count))
+                    else:
+                        subtype_list.append(
+                            (subtype_code, subtype_name, subtype_count, [])
+                        )
 
-                if not include_assettypes:
-                    subtype_list.append((subtype_code, subtype_name, subtype_count))
-                else:
-                    subtype_list.append((subtype_code, subtype_name, subtype_count, []))
+                # Sort on subtype code
+                sorted_subtype_list = sorted(subtype_list, key=lambda x: x[0])
 
-            # Sort on subtype code
-            sorted_subtype_list = sorted(subtype_list, key=lambda x: x[0])
-
-        # Add details to data list
-        val_tuple = (fds, ds, shape_type, record_count, sorted_subtype_list)
-        records.append(val_tuple)
-    records.append("")
+            # Add details to data list
+            val_tuple = (fds, ds, shape_type, record_count, sorted_subtype_list)
+            records.append(val_tuple)
+        except:
+            log_it(f"An error was encountered: {traceback.format_exc()}", 1)
+            continue
+        records.append("")
 
 # Write results to excel
 if records:

@@ -1,17 +1,34 @@
 """
-report_domain_errors.py
-Brooke Reams - breams@esri.com
-Dec. 22, 2025
+Script Name: report_domain_errors.py
+Author: Brooke Reams - breams@esri.com
+Date: Dec. 22, 2025
 
 Description:
-Finds values in domain fields that do not conform to domain coded values/ranges.
-Feature classes/tables with domain errors are reported in an output Excel file.
+    Finds values in domain fields that do not conform to
+        domain coded values/ranges. Feature classes/tables
+        with domain errors are reported in an output Excel file.
 
-ArcGIS Pro 3.6.0
-Python 3.13.7
+Inputs:
+    - in_ws (str): Path to the geodatabase workspace containing
+        domains.
+
+    - ds_list (list): List of (strings) feature class and table names
+        (prepended with feature dataset name where applicable) that
+        will be included in the output report.
+
+Outputs:
+    - out_xls (str): Path (including file name) to the output report
+        xls file containing the domain errors.
+
+Notes:
+
+Versions:
+    - ArcGIS Pro 3.5.2
+    - Python 3.11.11
+
+Copyright (c) 2026 Esri. All rights reserved.
 
 Updates:
-
 
 """
 
@@ -20,7 +37,6 @@ import os
 import openpyxl
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment
-
 
 # Overwrite existing output
 arcpy.env.overwriteOutput = 1

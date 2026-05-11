@@ -1,14 +1,28 @@
 """
-Brooke Reams - breams@esri.com
-Oct. 21, 2025
+Script Name: fill_factor.py
+Author: Brooke Reams - breams@esri.com
+Date: Oct. 21, 2025
 
 Description:
-Loops through all feature classes and tables at the root
-and feature dataset level and reports field properties
-on each dataset.
+    Loops through all feature classes and tables at the root
+    and feature dataset level and reports field properties
+    on each dataset.
 
-ArcGIS Pro 3.5.2
-Python 3.11.11
+Inputs:
+    - in_ws (str): Path to the geodatabase workspace used to report
+        field properties.
+
+Outputs:
+    - out_xls (str): Path (including file name) to the output report
+        xls file containing the fill factor details.
+
+Notes:
+
+Versions:
+    - ArcGIS Pro 3.5.2
+    - Python 3.11.11
+
+Copyright (c) 2026 Esri. All rights reserved.
 
 Updates:
 3/30/2026:      Fix to check empty string (non-null) values

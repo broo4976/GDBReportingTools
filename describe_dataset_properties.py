@@ -1,14 +1,28 @@
 """
-Brooke Reams - breams@esri.com
-Oct. 16, 2025
+Script Name: validate_schema_report.py
+Author: Brooke Reams - breams@esri.com
+Date: Oct. 16, 2025
 
 Description:
-Loops through all feature classes and tables at the root
-and feature dataset level and reports globlaid, editor
-tracking, and coordinate system properties on each dataset.
+    Loops through all feature classes and tables at the root
+    and feature dataset level and reports globlaid, editor
+    tracking, and coordinate system properties on each dataset.
 
-ArcGIS Pro 3.5.2
-Python 3.11.11
+Inputs:
+    - in_ws (str): Path to the geodatabase workspace containing
+        feature classes and tables to describe.
+
+Outputs:
+    - out_xls (str): Path (including file name) to the output report xls file
+        containing the dataset properties.
+
+Notes:
+
+Versions:
+    - ArcGIS Pro 3.5.2
+    - Python 3.11.11
+
+Copyright (c) 2026 Esri. All rights reserved.
 
 Updates:
 11/12/2025:     Error thrown when attempting to write vcs

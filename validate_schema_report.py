@@ -13,7 +13,7 @@ Inputs:
         Report GP tool.
 
 Outputs:
-    - out_xls (str): Path (including file name) to the output xls file
+    - out_xls (str): Path (including file name) to the output report xls file
         containing error details.
 
 Notes:
@@ -27,6 +27,9 @@ Versions:
     - Python 3.11.11
 
 Copyright (c) 2026 Esri. All rights reserved.
+
+Updates:
+
 """
 
 import arcpy

@@ -1,18 +1,30 @@
 """
-Brooke Reams - breams@esri.com
-Jan. 5, 2026
+Script Name: domain_mapper.py
+Author: Brooke Reams - breams@esri.com
+Date: Jan. 5, 2026
 
 Description:
-Loops through coded value domains in an input geodatabse
-and creates an output Excel report for mapping field values
-to their respective domains.  Designed to be used with FME.
+    Loops through coded value domains in an input geodatabse
+    and creates an output Excel report for mapping field values
+    to their respective domains.  Designed to be used with FME.
 
+Inputs:
+    - in_ws (str): Path to the geodatabase workspace containing
+        domains.
 
-ArcGIS Pro 3.5.2
-Python 3.11.11
+Outputs:
+    - out_xls (str): Path (including file name) to the output report
+        xls file containing the domain/field mappings.
+
+Notes:
+
+Versions:
+    - ArcGIS Pro 3.5.2
+    - Python 3.11.11
+
+Copyright (c) 2026 Esri. All rights reserved.
 
 Updates:
-
 
 """
 
@@ -41,7 +53,7 @@ def update_sheet_name(sheet_name):
     if m:
         num = m.group().replace("_", "")
         char_len = len(num)
-        return sheet_name[:-1*(char_len)] + f"{int(num)+1}"
+        return sheet_name[: -1 * (char_len)] + f"{int(num)+1}"
     else:
         return sheet_name + "_1"
 
@@ -65,7 +77,7 @@ def get_close_matches(value, possibilities, n=3, cutoff=0.5):
             matches.append(value)
             break
 
-    # Use difflib 
+    # Use difflib
     matches.extend(difflib.get_close_matches(value, possibilities, n, cutoff))
 
     return list(set(matches))
@@ -94,8 +106,14 @@ def autofit_column_widths(ws):
 
 
 # Tool inputs
-in_ws = arcpy.GetParameterAsText(0) or r"C:\Users\broo4976\OneDrive - Esri\Projects\MichelleJohnson\ReportingTools\Data_Readiness.gdb"
-out_xls = arcpy.GetParameterAsText(1) or r"C:\Users\broo4976\OneDrive - Esri\Projects\MichelleJohnson\ReportingTools\test1.xlsx"
+in_ws = (
+    arcpy.GetParameterAsText(0)
+    or r"C:\Users\broo4976\OneDrive - Esri\Projects\MichelleJohnson\ReportingTools\Data_Readiness.gdb"
+)
+out_xls = (
+    arcpy.GetParameterAsText(1)
+    or r"C:\Users\broo4976\OneDrive - Esri\Projects\MichelleJohnson\ReportingTools\test1.xlsx"
+)
 
 # Set workspace environment
 arcpy.env.workspace = in_ws
@@ -123,18 +141,25 @@ for fds in fds_list:
 
             # Get a list of unique values in field with domain
             attr_values = []
-            with arcpy.da.SearchCursor(fc, [fld.name], f"{fld.name} IS NOT NULL", sql_clause=("DISTINCT", None)) as cur:
+            with arcpy.da.SearchCursor(
+                fc, [fld.name], f"{fld.name} IS NOT NULL", sql_clause=("DISTINCT", None)
+            ) as cur:
                 for row in cur:
                     attr_values.append(row[0])
             attr_values_dict[f"{fc}:{fld.name}"] = attr_values
 
 
-
 # Get a list of coded value domains in workspace
-domain_list = [domain for domain in arcpy.da.ListDomains(in_ws) if domain.domainType == "CodedValue"]
+domain_list = [
+    domain
+    for domain in arcpy.da.ListDomains(in_ws)
+    if domain.domainType == "CodedValue"
+]
 
 # Loop through domains in workspace and get required details for each
-report_dict = {} # {domain name: {fields: ['fc:fld', 'fc:fld'], codes: {code: {desc: description, matches: {'fc:fld': match}, close: {'fc:fld': [close match, close match]}}}, others: {'fc:fld': [value, value]}}
+report_dict = (
+    {}
+)  # {domain name: {fields: ['fc:fld', 'fc:fld'], codes: {code: {desc: description, matches: {'fc:fld': match}, close: {'fc:fld': [close match, close match]}}}, others: {'fc:fld': [value, value]}}
 for domain in domain_list:
     # Get coded values
     coded_values = domain.codedValues
@@ -145,13 +170,14 @@ for domain in domain_list:
     # Initialize domain fields list
     domain_fld_list = []
     # Initialize dictionary to store each code, description, and values
-    codes_dict = {} # {domain code: {desc: code description, matches: {'fc:fld': match}, close: {'fc:fld': [close match, close match]}}}
-    others_dict = {} # {'fc:fld': [value, value, value]
+    codes_dict = (
+        {}
+    )  # {domain code: {desc: code description, matches: {'fc:fld': match}, close: {'fc:fld': [close match, close match]}}}
+    others_dict = {}  # {'fc:fld': [value, value, value]
     # Initialize codes dictionary
     for code, desc in coded_values.items():
         codes_dict[code] = {"desc": desc, "matches": {}, "close": {}}
-    
-    
+
     # Get fields assigned to current domain
     if domain.name in domain_fld_dict.keys():
         domain_fld_list = domain_fld_dict[domain.name]
@@ -202,9 +228,13 @@ for domain in domain_list:
             # Check for other values that are not matches and are not close matches
             others_list = list(set(non_match_list) - set(used_list2))
             others_dict[domain_fld] = others_list
-            
+
     # Add data to domain dictionary
-    report_dict[domain.name] = {"fields": domain_fld_list, "codes": codes_dict, "others": others_dict}
+    report_dict[domain.name] = {
+        "fields": domain_fld_list,
+        "codes": codes_dict,
+        "others": others_dict,
+    }
 
 
 # Loop through domain dictionary and print info to Excel
@@ -232,7 +262,7 @@ if report_dict:
         col = 3
         for fld in domain_fld_list:
             ws.cell(row=1, column=col, value=fld)
-            col+=1       
+            col += 1
 
         # Bold first row
         bold_font = openpyxl.styles.Font(bold=True)
@@ -240,8 +270,12 @@ if report_dict:
             cell.font = bold_font
 
         # Create yellow and orange fills for hightlighted cells
-        yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-        orange_fill = PatternFill(start_color="FF991C", end_color="FF991C", fill_type="solid")
+        yellow_fill = PatternFill(
+            start_color="FFFF00", end_color="FFFF00", fill_type="solid"
+        )
+        orange_fill = PatternFill(
+            start_color="FF991C", end_color="FF991C", fill_type="solid"
+        )
 
         # Add coded value details
         codes_dict = domain_details["codes"]
@@ -266,7 +300,7 @@ if report_dict:
             for fld, val_list in close_matches.items():
                 row = close_start_row
                 for val in val_list:
-                    row+=1
+                    row += 1
                     ws[f"A{row}"] = code
                     ws[f"B{row}"] = code_details["desc"]
                     # Get column by getting index position in list of fields
@@ -276,7 +310,7 @@ if report_dict:
                     highlight_cell = ws.cell(row=row, column=col, value=val)
                     highlight_cell.fill = yellow_fill
 
-            row+=1
+            row += 1
 
         # Add other values to bottom of field and highlight orange
         others_dict = domain_details["others"]
@@ -287,8 +321,8 @@ if report_dict:
             for val in val_list:
                 highlight_cell = ws.cell(row=row, column=col, value=val)
                 highlight_cell.fill = orange_fill
-                row+=1
-        
+                row += 1
+
         # Apply autofit to all columns
         autofit_column_widths(ws)
 
@@ -296,7 +330,7 @@ if report_dict:
     wb._sheets.sort(key=lambda ws: ws.title.lower())
     # Reset the active sheet
     wb.active = 0
-    
+
     # Save excel
     wb.save(out_xls)
 

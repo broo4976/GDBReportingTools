@@ -1,14 +1,31 @@
 """
+Script Name: record_count.py
 Brooke Reams - breams@esri.com
-Oct. 16, 2025
+Date: Oct. 16, 2025
 
 Description:
-Loops through all feature classes and tables at the root
-and feature dataset level and reports basic properties
-on each dataset.
+    Loops through all feature classes and tables at the root
+    and feature dataset level and reports basic properties
+    on each dataset.
 
-ArcGIS Pro 3.5.2
-Python 3.11.11
+Inputs:
+    - in_ws (str): Path to the geodatabase workspace containing
+        feature classes and tables to describe.
+
+    - include_assettypes (bool): Option to include asset types in the output
+        report.
+
+Outputs:
+    - out_xls (str): Path (including file name) to the output report xls file
+        containing record counts.
+
+Notes:
+
+Versions:
+    - ArcGIS Pro 3.5.2
+    - Python 3.11.11
+
+Copyright (c) 2026 Esri. All rights reserved.
 
 Updates:
 11/4/2025:      Fix for tables; changed MakeFeatureLayer to MakeTableView.

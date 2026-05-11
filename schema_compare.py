@@ -10,7 +10,10 @@ Description:
 Inputs:
     - xml_file_base (str): Path to the base schema for comparison.
 
-    - xml_file_test (str): Path to the test schema for comparison
+    - xml_file_test (str): Path to the test schema for comparison.
+
+    - ignore_str (str): Optional semi-colon seperated strings of categories
+        to ignore when comparing schemas.
 
 Outputs:
     - out_xls (str): Path (including file name) to the output report xls file

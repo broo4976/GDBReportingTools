@@ -5,8 +5,8 @@ Date: Dec. 22, 2025
 
 Description:
     Finds values in domain fields that do not conform to
-        domain coded values/ranges. Feature classes/tables
-        with domain errors are reported in an output Excel file.
+    domain coded values/ranges. Feature classes/tables
+    with domain errors are reported in an output Excel file.
 
 Inputs:
     - in_ws (str): Path to the geodatabase workspace containing

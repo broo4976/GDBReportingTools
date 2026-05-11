@@ -4,7 +4,7 @@ Author: Brooke Reams - breams@esri.com
 Date: Jan. 5, 2026
 
 Description:
-    Loops through coded value domains in an input geodatabse
+    Loops through coded value domains in an input geodatabase
     and creates an output Excel report for mapping field values
     to their respective domains.  Designed to be used with FME.
 

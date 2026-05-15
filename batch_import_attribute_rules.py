@@ -1,5 +1,5 @@
 """
-Script Name: batch_export_attribute_rules.py
+Script Name: batch_import_attribute_rules.py
 Author: Brooke Reams (breams@esri.com)
 Date: May 14, 2026
 

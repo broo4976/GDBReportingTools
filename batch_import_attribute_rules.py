@@ -41,8 +41,8 @@ def log_it(message, level=0):
 
 
 # Inputs
-in_fldr = arcpy.GetParameterAsText(0)
-in_gdb = arcpy.GetParameterAsText(1)
+in_gdb = arcpy.GetParameterAsText(0)
+in_fldr = arcpy.GetParameterAsText(1)
 
 # Set the workspace envionment
 arcpy.env.workspace = in_gdb

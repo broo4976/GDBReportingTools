@@ -29,8 +29,6 @@ Updates:
 
 import arcpy
 import logging
-import os
-import datetime
 
 
 def log_it(message):

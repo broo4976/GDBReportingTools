@@ -12,7 +12,7 @@ Inputs:
         rules to delete.
 
 Outputs:
-    - log_flie (str): Optional file containing log messages.
+    - out_log (str): Optional file containing log messages.
 
 Notes:
 

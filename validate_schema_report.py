@@ -95,8 +95,14 @@ def search_end_row(ws, row, col_index):
 
 
 # Input xls file
-in_xls = arcpy.GetParameterAsText(0)
-out_xls = arcpy.GetParameterAsText(1)
+in_xls = (
+    arcpy.GetParameterAsText(0)
+    or r"C:\Users\broo4976\OneDrive - Esri\Projects\MichelleJohnson\ReportingTools\OCSAN_APSchema_2026 - Copy.xlsx"
+)
+out_xls = (
+    arcpy.GetParameterAsText(1)
+    or r"C:\Users\broo4976\OneDrive - Esri\Projects\MichelleJohnson\ReportingTools\test2.xlsx"
+)
 
 # Open workbook (but ignore warning)
 with warnings.catch_warnings(record=True):
@@ -265,7 +271,6 @@ for ws in ds_sheets:
     if subtype_fld:
         # Check for presence of at least one row under Subtype category
         start_row = search_start_row(ws, 1, 1, "Subtype", "Name")
-        # if ws[f"A{start_row}"].value is None:
         if not ws[f"A{start_row}"].value:
             cur_dict["Subtype Category Errors"].append("No subtype values listed")
             continue
@@ -278,29 +283,33 @@ for ws in ds_sheets:
         # Search subtype field info category
         start_row = search_start_row(ws, 1, 1, "SubtypeFieldInfo", "Subtype Name")
         end_row = search_end_row(ws, start_row, 1)
-        # Init set for subtype field info names
-        subtype_fld_info_subtype_list = set()
-        # Init set for subtype field info field names
-        subtype_fld_info_fld_list = set()
-        # Loop through all subtype field info rows
+        # Init list for subtype field info names
+        subtype_fld_info_subtype_list = []
+        # Init list for subtype field info field names
+        subtype_fld_info_fld_list = []
+        # Init list to store subtype domain details
         subtype_fld_info_domain_list = (
             []
-        )  # [{domain name: {default value: abc, field name: assettype}}]
+        )  # [{domain name: {default value: abc, field name: assettype, row: i}}]
+        # Loop through all subtype field info rows
         for i in range(start_row, end_row + 1):
-            subtype_fld_info_subtype_list.add(ws[f"A{i}"].value.lower())
-            subtype_fld_info_fld_list.add(ws[f"C{i}"].value.lower())
+            subtype_fld_info_subtype_list.append((ws[f"A{i}"].value.lower(), i))
+            subtype_fld_info_fld_list.append((ws[f"C{i}"].value.lower(), i))
             if ws[f"E{i}"].value:
                 subtype_fld_info_domain_list.append(
                     {
                         ws[f"E{i}"].value: {
                             "default value": ws[f"D{i}"].value,
                             "field name": ws[f"C{i}"],
+                            "row": i,
                         }
                     }
                 )
 
         # Check for subtype info field names in list of dataset fields
-        for fld in subtype_fld_info_fld_list:
+        for item in subtype_fld_info_fld_list:
+            fld = item[0]
+            i = item[1]
             if fld not in list(flds_dict.keys()):
                 errors_found = True
                 cur_dict["SubtypeFieldInfo Category Errors"].append(
@@ -311,7 +320,9 @@ for ws in ds_sheets:
                 )
 
         # Check for subtype info subtype names in subtype names list
-        for subtype in subtype_fld_info_subtype_list:
+        for item in subtype_fld_info_subtype_list:
+            subtype = item[0]
+            i = item[1]
             if subtype not in subtype_list:
                 errors_found = True
                 cur_dict["SubtypeFieldInfo Category Errors"].append(
@@ -325,6 +336,11 @@ for ws in ds_sheets:
         if subtype_fld_info_domain_list:
             for d in subtype_fld_info_domain_list:
                 for domain_name, item_details in d.items():
+                    # Get default value, field name, and row listed for domain
+                    default_val = item_details["default value"]
+                    field_name = item_details["field name"]
+                    i = item_details["row"]
+
                     # Check domain dict for domain name
                     if domain_name not in domain_dict.keys():
                         errors_found = True
@@ -335,10 +351,6 @@ for ws in ds_sheets:
                             )
                         )
                     else:
-                        # Get default value and field name listed for domain
-                        default_val = item_details["default value"]
-                        field_name = item_details["field name"]
-
                         if default_val:
                             # Domain name found, check default value exists in codes
                             if domain_dict[domain_name]["domain type"] == "Coded Value":

@@ -28,6 +28,7 @@ Versions:
 Copyright (c) 2026 Esri. All rights reserved.
 
 Updates:
+5/27/2026:      Fix for incorrect row number displayed for SubtypeFieldInfo category errors.
 
 """
 
@@ -95,15 +96,8 @@ def search_end_row(ws, row, col_index):
 
 
 # Input xls file
-in_xls = (
-    arcpy.GetParameterAsText(0)
-    or r"C:\Users\broo4976\OneDrive - Esri\Projects\MichelleJohnson\ReportingTools\OCSAN_APSchema_2026 - Copy.xlsx"
-)
-out_xls = (
-    arcpy.GetParameterAsText(1)
-    or r"C:\Users\broo4976\OneDrive - Esri\Projects\MichelleJohnson\ReportingTools\test2.xlsx"
-)
-
+in_xls = arcpy.GetParameterAsText(0)
+out_xls = arcpy.GetParameterAsText(1)
 # Open workbook (but ignore warning)
 with warnings.catch_warnings(record=True):
     warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")

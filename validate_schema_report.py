@@ -29,6 +29,11 @@ Copyright (c) 2026 Esri. All rights reserved.
 
 Updates:
 5/27/2026:      Fix for incorrect row number displayed for SubtypeFieldInfo category errors.
+6/22/2026:      Added check to ensure a field name is populated in Column C of the
+                SubtypeFieldInfo section.
+6/22/2026:      Added check for comparing domain data type to the field data type when a
+                field has a domain.
+
 
 """
 
@@ -38,7 +43,6 @@ import re
 import os
 import openpyxl
 from openpyxl.utils import get_column_letter
-from openpyxl.styles import Alignment
 
 
 def log_it(message, level=0):
@@ -215,6 +219,18 @@ for ws in ds_sheets:
                         )
                     )
                 else:
+                    # Check that field type matches domain field type
+                    if (
+                        domain_dict[domain_name]["field type"].lower()
+                        != ws[f"C{i}"].value.lower()
+                    ):
+                        cur_dict["Field Category Errors"].append(
+                            (
+                                f"Field types do not match for Field '{field}' of type {ws[f"C{i}"].value} and Domain '{domain_name}' of type {domain_dict[domain_name]["field type"]}",
+                                i,
+                            )
+                        )
+
                     # Get default value and field name listed for domain
                     default_val = ws[f"G{i}"].value
                     field_name = ws[f"A{i}"].value
@@ -288,6 +304,14 @@ for ws in ds_sheets:
         # Loop through all subtype field info rows
         for i in range(start_row, end_row + 1):
             subtype_fld_info_subtype_list.append((ws[f"A{i}"].value.lower(), i))
+            if not ws[f"C{i}"].value:
+                cur_dict["SubtypeFieldInfo Category Errors"].append(
+                    (
+                        f"Subtype '{ws[f"A{i}"].value}' in SubtypeFieldInfo does not have a field name listed in Column C",
+                        i,
+                    )
+                )
+                continue
             subtype_fld_info_fld_list.append((ws[f"C{i}"].value.lower(), i))
             if ws[f"E{i}"].value:
                 subtype_fld_info_domain_list.append(

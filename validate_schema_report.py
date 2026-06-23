@@ -33,6 +33,7 @@ Updates:
                 SubtypeFieldInfo section.
 6/22/2026:      Added check for comparing domain data type to the field data type when a
                 field has a domain.
+6/23/2026:      Fix for syntax error appearing when running the tool from a script tool in Pro.
 
 
 """
@@ -220,13 +221,14 @@ for ws in ds_sheets:
                     )
                 else:
                     # Check that field type matches domain field type
+                    fld_data_type = ws[f"C{i}"].value
                     if (
                         domain_dict[domain_name]["field type"].lower()
-                        != ws[f"C{i}"].value.lower()
+                        != fld_data_type.lower()
                     ):
                         cur_dict["Field Category Errors"].append(
                             (
-                                f"Field types do not match for Field '{field}' of type {ws[f"C{i}"].value} and Domain '{domain_name}' of type {domain_dict[domain_name]["field type"]}",
+                                f"Data types do not match for Field '{field}' of type {fld_data_type} and Domain '{domain_name}' of type {domain_dict[domain_name]["field type"]}",
                                 i,
                             )
                         )

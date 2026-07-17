@@ -29,6 +29,7 @@ Versions:
 Copyright (c) 2026 Esri. All rights reserved.
 
 Updates:
+7/17/2026:      Updated code to report domain errors by subtypes.
 
 """
 
@@ -47,14 +48,14 @@ def log_it(message):
     arcpy.AddMessage(message)
 
 
-def autofit_column_widths(ws):
+def autofit_column_widths(ws, has_subtypes):
     for col in ws.columns:
         max_length = 0
         column = get_column_letter(
             col[0].column
         )  # Get column letter from the first cell in the column
         # Skip column C because it's word wrapped
-        if column != "C":
+        if (not has_subtypes and column != "D") or (has_subtypes and column != "E"):
             for cell in col:
                 try:
                     if len(str(cell.value)) > max_length:
@@ -118,13 +119,50 @@ for fds, ds_list in ds_dict.items():
         # Get feature count
         feat_count = arcpy.management.GetCount(ds).getOutput(0)
 
-        # Get fields with domains
-        domain_flds = [fld for fld in arcpy.ListFields(ds) if fld.domain]
+        # Check for subtypes
+        has_subtypes = False
+        if arcpy.Describe(ds).subtypeFieldName != "":
+            has_subtypes = True
+            log_it("Has Subtypes: True")
+            subtypes = arcpy.da.ListSubtypes(ds)
+            subtype_fld = arcpy.Describe(ds).subtypeFieldName
+            # Init domains list
+            domains = []
+            for st_code, st_dict in subtypes.items():
+                if "FieldValues" in st_dict:
+                    for fld_name, fld_vals in st_dict["FieldValues"].items():
+                        if fld_vals[1]:
+                            domain = fld_vals[1]
+                            fld_obj = arcpy.ListFields(ds, fld_name)[0]
+                            st_name = st_dict["Name"]
+                            domains.append(
+                                (
+                                    fld_name,
+                                    fld_obj.type,
+                                    domain.name,
+                                    st_code,
+                                    st_name,
+                                )
+                            )
+        else:
+            log_it("Has Subtypes: False")
+            # Get fields with domains
+            domains = [
+                (fld.name, fld.type, fld.domain)
+                for fld in arcpy.ListFields(ds)
+                if fld.domain
+            ]
+
         # Loop through domain fields to get domain properties
         fld_list = []
-        for fld in domain_flds:
+        for domain_tuple in domains:
             invalid_list = []
-            domain_name = fld.domain
+            fld_name = domain_tuple[0]
+            fld_type = domain_tuple[1]
+            domain_name = domain_tuple[2]
+            if has_subtypes:
+                subtype_code = domain_tuple[3]
+                subtype_name = domain_tuple[4]
             # Look up domain in dictionary
             domain = domain_dict[domain_name]
             # Get domain properties
@@ -133,10 +171,16 @@ for fds, ds_list in ds_dict.items():
             # Get domain values/ranges
             if domain_type == "CodedValue":
                 valid_values = tuple(domain.codedValues.keys())
-                where = f"{fld.name} NOT IN {valid_values}"
+                if len(valid_values) == 1:
+                    where = f"{fld_name} <> {valid_values[0]}"
+                else:
+                    where = f"{fld_name} NOT IN {valid_values}"
+
+                if has_subtypes:
+                    where += f" AND {subtype_fld} = {subtype_code}"
                 unique_list = []
                 with arcpy.da.SearchCursor(
-                    ds, [fld.name], where, sql_clause=("DISTINCT", None)
+                    ds, [fld_name], where, sql_clause=("DISTINCT", None)
                 ) as cur:
                     for row in cur:
                         unique_list.append(row[0])
@@ -149,10 +193,12 @@ for fds, ds_list in ds_dict.items():
                     # Get count of each invalid value
                     for val in unique_list:
                         # Handle string vs number
-                        if fld.type == "String":
-                            where = f"{fld.name} = '{val}'"
+                        if fld_type == "String":
+                            where = f"{fld_name} = '{val}'"
                         else:
-                            where = f"{fld.name} = {val}"
+                            where = f"{fld_name} = {val}"
+                        if has_subtypes:
+                            where += f" AND {subtype_fld} = {subtype_code}"
 
                         # Handle fc vs table
                         if arcpy.Describe(ds).dataType == "FeatureClass":
@@ -162,14 +208,20 @@ for fds, ds_list in ds_dict.items():
 
                         # Get count of invalid values
                         count = arcpy.management.GetCount("i").getOutput(0)
-                        invalid_list.append({"value": val, "count": count})
+                        arcpy.management.Delete("i")
+                        if val == "":
+                            invalid_list.append({"value": "<Empty>", "count": count})
+                        else:
+                            invalid_list.append({"value": val, "count": count})
             else:
                 min_range = domain.range[0]
                 max_range = domain.range[1]
                 valid_values = f"{min_range} - {max_range}"
 
                 # Find where value is less than min range
-                where = f"{fld.name} < {min_range}"
+                where = f"{fld_name} < {min_range}"
+                if has_subtypes:
+                    where += f" AND {subtype_fld} = {subtype_code}"
                 # Handle fc vs table
                 if arcpy.Describe(ds).dataType == "FeatureClass":
                     arcpy.management.MakeFeatureLayer(ds, "i", where)
@@ -178,11 +230,14 @@ for fds, ds_list in ds_dict.items():
 
                 # Get count of invalid values
                 count = arcpy.management.GetCount("i").getOutput(0)
+                arcpy.management.Delete("i")
                 if int(count) > 0:
                     invalid_list.append({"value": f"< {min_range}", "count": count})
 
                 # Find where value is greater than min range
-                where = f"{fld.name} > {max_range}"
+                where = f"{fld_name} > {max_range}"
+                if has_subtypes:
+                    where += f" AND {subtype_fld} = {subtype_code}"
                 # Handle fc vs table
                 if arcpy.Describe(ds).dataType == "FeatureClass":
                     arcpy.management.MakeFeatureLayer(ds, "i", where)
@@ -191,27 +246,48 @@ for fds, ds_list in ds_dict.items():
 
                 # Get count of invalid values
                 count = arcpy.management.GetCount("i").getOutput(0)
+                arcpy.management.Delete("i")
                 if int(count) > 0:
                     invalid_list.append({"value": f"> {max_range}", "count": count})
 
             # Only add info if invalid values were found
             if invalid_list:
-                domain_info = {
-                    "field": fld.name,
-                    "domain_type": domain_type,
-                    "valid_values": valid_values,
-                    "invalid": invalid_list,
-                }
+                if has_subtypes:
+                    domain_info = {
+                        "subtype": f"{subtype_name} ({subtype_code})",
+                        "field": fld_name,
+                        "domain_name": domain_name,
+                        "domain_type": domain_type,
+                        "valid_values": valid_values,
+                        "invalid": invalid_list,
+                    }
+                else:
+                    domain_info = {
+                        "field": fld_name,
+                        "domain_name": domain_name,
+                        "domain_type": domain_type,
+                        "valid_values": valid_values,
+                        "invalid": invalid_list,
+                    }
                 fld_list.append(domain_info)
 
         # Only add info if fields with invalid values were found
         if fld_list:
-            # Sort fields alphabetically
-            sorted_fld_list = sorted(fld_list, key=lambda x: x["field"])
+            if has_subtypes:
+                # Sort fields alphabetically
+                sorted_fld_list1 = sorted(fld_list, key=lambda x: x["field"])
+                # Sort on subtype code
+                sorted_fld_list = sorted(sorted_fld_list1, key=lambda x: x["subtype"])
+            else:
+                # Sort fields alphabetically
+                sorted_fld_list = sorted(fld_list, key=lambda x: x["field"])
+
             report_dict[name] = {
                 "feature_count": feat_count,
                 "domain_fields": sorted_fld_list,
+                "has_subtypes": has_subtypes,
             }
+
 
 if report_dict:
     # Create new workbook
@@ -228,61 +304,128 @@ if report_dict:
         ws["A2"].font = bold_font
         ws["B2"] = int(values["feature_count"])
         ws["B2"].font = bold_font
-        ws["A4"] = "Field Name"
-        ws["A4"].font = bold_font
-        ws["B4"] = "Domain Type"
-        ws["B4"].font = bold_font
-        ws["C4"] = "Valid Values"
-        ws["C4"].font = bold_font
-        ws["D4"] = "Invalid Value"
-        ws["D4"].font = bold_font
-        ws["E4"] = "Count"
-        ws["E4"].font = bold_font
+        if values["has_subtypes"]:
+            ws["A4"] = "Subtype Code/Name"
+            ws["A4"].font = bold_font
+            ws["B4"] = "Field Name"
+            ws["B4"].font = bold_font
+            ws["C4"] = "Domain Name"
+            ws["C4"].font = bold_font
+            ws["D4"] = "Domain Type"
+            ws["D4"].font = bold_font
+            ws["E4"] = "Valid Values"
+            ws["E4"].font = bold_font
+            ws["F4"] = "Invalid Value"
+            ws["F4"].font = bold_font
+            ws["G4"] = "Count"
+            ws["G4"].font = bold_font
 
-        row = 5
-        for domain_fld in values["domain_fields"]:
-            ws[f"A{row}"] = domain_fld["field"]
-            ws[f"B{row}"] = domain_fld["domain_type"]
-            ws[f"C{row}"] = domain_fld["valid_values"]
-            merge_start = row
-            row += 1
-            for val in domain_fld["invalid"]:
-                ws[f"D{row}"] = val["value"]
-                ws[f"E{row}"] = int(val["count"])
-                merge_end = row
-                row += 1
+            row = 5
+            for domain_fld in values["domain_fields"]:
+                ws[f"A{row}"] = domain_fld["subtype"]
+                ws[f"B{row}"] = domain_fld["field"]
+                ws[f"C{row}"] = domain_fld["domain_name"]
+                ws[f"D{row}"] = domain_fld["domain_type"]
+                ws[f"E{row}"] = domain_fld["valid_values"]
+                merge_start = row
+                # row += 1
+                for val in domain_fld["invalid"]:
+                    ws[f"F{row}"] = val["value"]
+                    ws[f"G{row}"] = int(val["count"])
+                    merge_end = row
+                    row += 1
 
-            # Merge invalid values cells in columns A, B, and C
-            ws.merge_cells(f"A{merge_start}:A{merge_end}")
-            ws.merge_cells(f"B{merge_start}:B{merge_end}")
-            ws.merge_cells(f"C{merge_start}:C{merge_end}")
+                # Merge invalid values cells in columns A, B, C, D, and E
+                ws.merge_cells(f"A{merge_start}:A{merge_end}")
+                ws.merge_cells(f"B{merge_start}:B{merge_end}")
+                ws.merge_cells(f"C{merge_start}:C{merge_end}")
+                ws.merge_cells(f"D{merge_start}:D{merge_end}")
+                ws.merge_cells(f"E{merge_start}:E{merge_end}")
+
+            # Update formatting for record count columns
+            for cell in ws["G"]:
+                cell.number_format = "#,##0"
+
+            # Center count data in column G
+            for row in ws.iter_rows(min_row=1, min_col=7, max_col=7):
+                for cell in row:
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            # Center count data in columns A, B, C, D, and E
+            for row in ws.iter_rows(min_row=5, min_col=1, max_col=5):
+                for cell in row:
+                    cell.alignment = Alignment(vertical="center")
+
+            # Set width for column E
+            ws.column_dimensions["E"].width = 40
+
+            # Word wrap column with valid vaues
+            for cell in ws["E"]:
+                cell.alignment = Alignment(wrapText=True, vertical="center")
+
+        else:
+            ws["A4"] = "Field Name"
+            ws["A4"].font = bold_font
+            ws["B4"] = "Domain Name"
+            ws["B4"].font = bold_font
+            ws["C4"] = "Domain Type"
+            ws["C4"].font = bold_font
+            ws["D4"] = "Valid Values"
+            ws["D4"].font = bold_font
+            ws["E4"] = "Invalid Value"
+            ws["E4"].font = bold_font
+            ws["F4"] = "Count"
+            ws["F4"].font = bold_font
+
+            row = 5
+            for domain_fld in values["domain_fields"]:
+                ws[f"A{row}"] = domain_fld["field"]
+                ws[f"B{row}"] = domain_fld["domain_name"]
+                ws[f"C{row}"] = domain_fld["domain_type"]
+                ws[f"D{row}"] = domain_fld["valid_values"]
+                merge_start = row
+                # row += 1
+                for val in domain_fld["invalid"]:
+                    ws[f"E{row}"] = val["value"]
+                    ws[f"F{row}"] = int(val["count"])
+                    merge_end = row
+                    row += 1
+
+                # Merge invalid values cells in columns A, B, C, and D
+                ws.merge_cells(f"A{merge_start}:A{merge_end}")
+                ws.merge_cells(f"B{merge_start}:B{merge_end}")
+                ws.merge_cells(f"C{merge_start}:C{merge_end}")
+                ws.merge_cells(f"D{merge_start}:D{merge_end}")
+
+            # Update formatting for record count columns
+            for cell in ws["F"]:
+                cell.number_format = "#,##0"
+
+            # Center count data in column F
+            for row in ws.iter_rows(min_row=1, min_col=6, max_col=6):
+                for cell in row:
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            # Center count data in columns A, B, C, and D
+            for row in ws.iter_rows(min_row=5, min_col=1, max_col=4):
+                for cell in row:
+                    cell.alignment = Alignment(vertical="center")
+
+            # Set width for column D
+            ws.column_dimensions["D"].width = 40
+
+            # Word wrap column with valid vaues
+            for cell in ws["D"]:
+                cell.alignment = Alignment(wrapText=True, vertical="center")
 
         # Update formatting for record count columns
         ws["B2"].number_format = "#,##0"
-        for cell in ws["E"]:
-            cell.number_format = "#,##0"
-
-        # Center count data in column E
-        for row in ws.iter_rows(min_row=1, min_col=5, max_col=5):
-            for cell in row:
-                cell.alignment = Alignment(horizontal="center", vertical="center")
-
-        # Set width for column C
-        ws.column_dimensions["C"].width = 40
-
-        # Word wrap column with valid vaues
-        for cell in ws["C"]:
-            cell.alignment = Alignment(wrapText=True, vertical="center")
-
-        # Center count data in columns A and B
-        for row in ws.iter_rows(min_row=5, min_col=1, max_col=2):
-            for cell in row:
-                cell.alignment = Alignment(vertical="center")
-
         # Apply autofit to all columns
-        autofit_column_widths(ws)
+        autofit_column_widths(ws, values["has_subtypes"])
 
     # Save excel file
     wb.save(out_xls)
     # Open excel file
     os.startfile(out_xls)
+else:
+    log_it("No domain errors were found in selected datasets")

@@ -34,6 +34,7 @@ Updates:
 6/22/2026:      Added check for comparing domain data type to the field data type when a
                 field has a domain.
 6/23/2026:      Fix for syntax error appearing when running the tool from a script tool in Pro.
+7/20/2026:      Additional fixes for syntax error with f strings.
 
 
 """
@@ -150,7 +151,7 @@ for ws in domain_sheets:
                 code = ws[f"A{i}"].value
                 codes.append(code)
                 if field_type == "String":
-                    if len(code) > max_length:
+                    if len(str(code)) > max_length:
                         max_length = len(code)
             d["codes"] = codes
             d["max length"] = max_length
@@ -193,15 +194,18 @@ for ws in ds_sheets:
         subtype_fld = None
         for i in range(start_row, end_row + 1):
             field = ws[f"A{i}"].value
-            flds_dict[ws[f"A{i}"].value.lower()] = {
+            flds_dict[field.lower()] = {
                 "data type": ws[f"C{i}"],
                 "length": ws[f"J{i}"],
             }
             # Check if field is subtype
-            if str(ws[f"D{i}"].value).lower() == "subtype":
-                subtype_fld = str(ws[f"A{i}"].value).lower()
+            usage = ws[f"D{i}"].value
+            if str(usage).lower() == "subtype":
+                subtype_fld_cell = ws[f"A{i}"].value
+                subtype_fld = str(subtype_fld_cell).lower()
                 # Check if integer
-                if not "integer" in str(ws[f"C{i}"].value).lower():
+                type_cell = ws[f"C{i}"].value
+                if not "integer" in str(type_cell).lower():
                     errors_found = True
                     cur_dict["Field Category Errors"].append(
                         (f"Subtype field '{subtype_fld}' data type is not int", i)
@@ -290,7 +294,8 @@ for ws in ds_sheets:
         end_row = search_end_row(ws, start_row, 1)
         subtype_list = []
         for i in range(start_row, end_row + 1):
-            subtype_list.append(str(ws[f"A{i}"].value).lower())
+            subtype_name = ws[f"A{i}"].value
+            subtype_list.append(str(subtype_name).lower())
 
         # Search subtype field info category
         start_row = search_start_row(ws, 1, 1, "SubtypeFieldInfo", "Subtype Name")
@@ -305,7 +310,8 @@ for ws in ds_sheets:
         )  # [{domain name: {default value: abc, field name: assettype, row: i}}]
         # Loop through all subtype field info rows
         for i in range(start_row, end_row + 1):
-            subtype_fld_info_subtype_list.append((ws[f"A{i}"].value.lower(), i))
+            subtype_name = ws[f"A{i}"].value
+            subtype_fld_info_subtype_list.append((subtype_name.lower(), i))
             if not ws[f"C{i}"].value:
                 cur_dict["SubtypeFieldInfo Category Errors"].append(
                     (
@@ -314,7 +320,8 @@ for ws in ds_sheets:
                     )
                 )
                 continue
-            subtype_fld_info_fld_list.append((ws[f"C{i}"].value.lower(), i))
+            fld_name = ws[f"C{i}"].value
+            subtype_fld_info_fld_list.append((fld_name.lower(), i))
             if ws[f"E{i}"].value:
                 subtype_fld_info_domain_list.append(
                     {

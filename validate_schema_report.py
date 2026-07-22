@@ -35,6 +35,7 @@ Updates:
                 field has a domain.
 6/23/2026:      Fix for syntax error appearing when running the tool from a script tool in Pro.
 7/20/2026:      Additional fixes for syntax error with f strings.
+7/22/2025:      Syntax error fix on Pro 3.5.
 
 
 """
@@ -232,7 +233,7 @@ for ws in ds_sheets:
                     ):
                         cur_dict["Field Category Errors"].append(
                             (
-                                f"Data types do not match for Field '{field}' of type {fld_data_type} and Domain '{domain_name}' of type {domain_dict[domain_name]["field type"]}",
+                                f"Data types do not match for Field '{field}' of type {fld_data_type} and Domain '{domain_name}' of type {domain_dict[domain_name]['field type']}",
                                 i,
                             )
                         )
@@ -313,9 +314,10 @@ for ws in ds_sheets:
             subtype_name = ws[f"A{i}"].value
             subtype_fld_info_subtype_list.append((subtype_name.lower(), i))
             if not ws[f"C{i}"].value:
+                subtype_name = ws[f"A{i}"].value
                 cur_dict["SubtypeFieldInfo Category Errors"].append(
                     (
-                        f"Subtype '{ws[f"A{i}"].value}' in SubtypeFieldInfo does not have a field name listed in Column C",
+                        f"Subtype '{subtype_name}' in SubtypeFieldInfo does not have a field name listed in Column C",
                         i,
                     )
                 )

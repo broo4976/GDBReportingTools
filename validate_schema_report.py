@@ -35,7 +35,8 @@ Updates:
                 field has a domain.
 6/23/2026:      Fix for syntax error appearing when running the tool from a script tool in Pro.
 7/20/2026:      Additional fixes for syntax error with f strings.
-7/22/2025:      Syntax error fix on Pro 3.5.
+7/22/2026:      Syntax error fix on Pro 3.5.
+7/27/2026:      Added checks for field precision, scale, length, editable, and required.
 
 
 """
@@ -178,13 +179,6 @@ for ws in ds_sheets:
         "Subtype Category Errors": [],
         "SubtypeFieldInfo Category Errors": [],
     }
-    # Get subtype info
-    start_row = search_start_row(ws, 1, 1, "Subtype", "Name")
-    end_row = search_end_row(ws, start_row, 1)
-
-    # Get subtype field info
-    start_row = search_start_row(ws, 1, 1, "SubtypeFieldInfo", "Name")
-    end_row = search_end_row(ws, start_row, 1)
 
     # Find row where fields begin
     start_row = search_start_row(ws, 1, 1, "Field", "Name")
@@ -199,6 +193,58 @@ for ws in ds_sheets:
                 "data type": ws[f"C{i}"],
                 "length": ws[f"J{i}"],
             }
+
+            # Ensure field has precision, scale, and length values are int
+            precision = ws[f"H{i}"].value
+            if not isinstance(precision, int):
+                errors_found = True
+                cur_dict["Field Category Errors"].append(
+                    (f"Field {field}: Precision (Column H) must be an integer", i)
+                )
+
+            scale = ws[f"I{i}"].value
+            if not isinstance(scale, int):
+                errors_found = True
+                cur_dict["Field Category Errors"].append(
+                    (f"Field {field}: Scale (Column I) must be an integer", i)
+                )
+
+            length = ws[f"J{i}"].value
+            if not isinstance(length, int):
+                errors_found = True
+                cur_dict["Field Category Errors"].append(
+                    (f"Field {field}: Length (Column J) must be an integer", i)
+                )
+
+            # Ensure field had editable and required values populated
+            editable = ws[f"K{i}"].value
+            if not isinstance(editable, bool) or (
+                isinstance(editable, str)
+                and editable.upper()
+                not in [
+                    "TRUE",
+                    "FALSE",
+                ]
+            ):
+                errors_found = True
+                cur_dict["Field Category Errors"].append(
+                    (f"Field {field}: Editable (Column K) must be TRUE or FALSE", i)
+                )
+
+            required = ws[f"L{i}"].value
+            if not isinstance(required, bool) or (
+                isinstance(required, str)
+                and required.upper()
+                not in [
+                    "TRUE",
+                    "FALSE",
+                ]
+            ):
+                errors_found = True
+                cur_dict["Field Category Errors"].append(
+                    (f"Field {field}: Required (Column L) must be TRUE or FALSE", i)
+                )
+
             # Check if field is subtype
             usage = ws[f"D{i}"].value
             if str(usage).lower() == "subtype":

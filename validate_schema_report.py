@@ -37,6 +37,8 @@ Updates:
 7/20/2026:      Additional fixes for syntax error with f strings.
 7/22/2026:      Syntax error fix on Pro 3.5.
 7/27/2026:      Added checks for field precision, scale, length, editable, and required.
+8/3/2026:       Added new error category for Domain Errors, with check for duplicate codes
+                within a domain.
 
 
 """
@@ -119,6 +121,9 @@ ds_sheets = [
     if re.search("^FC[0-9]+_", sheet_name) or re.search("^T[0-9]+_", sheet_name)
 ]
 
+# Init dictionary to store dataset errors
+ds_errors_dict = {}  # {ws name: {subtype errors: [], domain errors: []}}
+
 # Get domain sheet names
 log_it("Getting list of domains")
 domain_sheets = [
@@ -132,6 +137,15 @@ domain_dict = (
 # Loop through domain sheets to get domain details
 log_it("Getting domain properties")
 for ws in domain_sheets:
+    # Init errors found bool
+    errors_found = False
+    # Init current errors dictionary
+    cur_dict = {
+        "Domain Errors": [],
+        "Field Category Errors": [],
+        "Subtype Category Errors": [],
+        "SubtypeFieldInfo Category Errors": [],
+    }
     domain_name = ws["B9"].value
     d = {
         "field type": None,
@@ -151,6 +165,11 @@ for ws in domain_sheets:
         if start_row and end_row:
             for i in range(start_row, end_row + 1):
                 code = ws[f"A{i}"].value
+                if code in codes:
+                    errors_found = True
+                    cur_dict["Domain Errors"].append(
+                        (f"Duplicate code {code} in domain worksheet {ws.title}", i)
+                    )
                 codes.append(code)
                 if field_type == "String":
                     if len(str(code)) > max_length:
@@ -166,20 +185,22 @@ for ws in domain_sheets:
     d["domain type"] = domain_type
     domain_dict[domain_name] = d
 
-# Init dictionary to store dataset errors
-log_it("Searching for errors")
-ds_errors_dict = {}  # {ws name: {subtype errors: [], domain errors: []}}
+    if errors_found:
+        ds_errors_dict[ws.title] = cur_dict
+
+
+log_it("Searching for dataset errors")
 # Loop through dataset worksheets
 for ws in ds_sheets:
     # Init errors found bool
     errors_found = False
     # Init current errors dictionary
     cur_dict = {
+        "Domain Errors": [],
         "Field Category Errors": [],
         "Subtype Category Errors": [],
         "SubtypeFieldInfo Category Errors": [],
     }
-
     # Find row where fields begin
     start_row = search_start_row(ws, 1, 1, "Field", "Name")
     end_row = search_end_row(ws, start_row, 1)
@@ -473,7 +494,6 @@ for ws in ds_sheets:
     if errors_found:
         ds_errors_dict[ws.title] = cur_dict
 
-
 if ds_errors_dict:
     log_it("Errors were found... creating errors report")
     # Create new workbook
@@ -491,6 +511,16 @@ if ds_errors_dict:
     row = 2
     for ds, errors in ds_errors_dict.items():
         log_it(ds)
+        if errors["Domain Errors"]:
+            log_it("Domain Errors:")
+            for e in errors["Domain Errors"]:
+                log_it(f"\t{e}")
+                ws[f"A{row}"] = ds
+                ws[f"B{row}"] = e[1]
+                ws[f"C{row}"] = "Domain Error"
+                ws[f"D{row}"] = e[0]
+                row += 1
+
         if errors["Field Category Errors"]:
             log_it("Field Category Errors:")
             for e in errors["Field Category Errors"]:

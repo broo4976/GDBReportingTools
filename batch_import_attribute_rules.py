@@ -36,6 +36,7 @@ Copyright (c) 2026 Esri. All rights reserved.
 
 Updates:
 5/29/20256:     Added new param to allow user to choose specific attribute types to import.
+9/22/2026:      Fixes for f-strings.
 
 """
 
@@ -79,7 +80,8 @@ csv_filter_list = []
 if attr_rule_types:
     for ar_type in attr_rule_types:
         for csv_file in csv_all_list:
-            if csv_file.lower().endswith(f"{ar_type.lower()}.csv"):
+            ar_type_lower = ar_type.lower()
+            if csv_file.lower().endswith(f"{ar_type_lower}.csv"):
                 csv_filter_list.append(csv_file)
 else:
     for csv_file in csv_all_list:
@@ -94,9 +96,8 @@ for csv_file in csv_filter_list:
     file_name_no_ext = csv_file.lower().split(".csv")[0]
     # Get feature class name
     if file_name_no_ext.lower().split("_")[-1] in [s.lower() for s in attr_rule_types]:
-        name = file_name_no_ext.replace(
-            f"_{file_name_no_ext.lower().split("_")[-1]}", ""
-        )
+        file_name_no_ext_lower = file_name_no_ext.lower().split("_")[-1]
+        name = file_name_no_ext.replace(f"_{file_name_no_ext_lower}", "")
     else:
         name = file_name_no_ext.lower()
 

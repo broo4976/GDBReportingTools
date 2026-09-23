@@ -28,6 +28,7 @@ Copyright (c) 2026 Esri. All rights reserved.
 
 Updates:
 5/29/20256:     Added new param to allow user to choose specific attribute types to export.
+9/22/2026:      Fixes for f-strings.
 
 """
 
@@ -63,7 +64,8 @@ def export_attr_rules(ds, attr_rule_types, now):
                 df_filter = df[df["TYPE"] == ar_type.upper()]
                 if not df_filter.empty:
                     filter_out_file = os.path.join(out_fldr, f"{ds}_{ar_type}.csv")
-                    log_it(f"Exporting {ar_type.upper()} Rules for: {ds}")
+                    ar_type_upper = ar_type.upper()
+                    log_it(f"Exporting {ar_type_upper} Rules for: {ds}")
                     df_filter.to_csv(filter_out_file, index=False)
             # Delete original out file
             os.remove(out_file)
@@ -84,7 +86,8 @@ now = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
 # Check if input workspace is geodatabase or feature dataset
 data_type = arcpy.Describe(in_ws).dataType
-log_it(f"Input workspace type: {data_type.replace("Workspace", "Geodatabase")}")
+ws_type = data_type.replace("Workspace", "Geodatabase")
+log_it(f"Input workspace type: {ws_type}")
 # If datatype is a file gdb, get all feature datasets
 if data_type == "Workspace":
     fds_list = arcpy.ListDatasets(feature_type="Feature")

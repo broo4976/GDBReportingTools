@@ -30,6 +30,7 @@ Copyright (c) 2026 Esri. All rights reserved.
 
 Updates:
 5/29/20256:     Added new param to allow user to choose specific attribute types to delete.
+9/22/2026:      Fixes for f-strings.
 
 """
 
@@ -53,7 +54,8 @@ def delete_attribute_rules(ds, system_ar_names_list):
         # Get list of attribute rules and delete
         attr_names = [ar.name for ar in attr_rules if ar.type in system_ar_names_list]
         if attr_names:
-            log_it(f"Deleting {len(attr_names)} attribute rule(s) from {ds}")
+            len_attr_names = len(attr_names)
+            log_it(f"Deleting {len_attr_names} attribute rule(s) from {ds}")
             arcpy.management.DeleteAttributeRule(ds, attr_names)
             ar_found = True
 
@@ -98,14 +100,15 @@ if out_log:
 
 # Check if input workspace is geodatabase or feature dataset
 data_type = arcpy.Describe(in_ws).dataType
-log_it(f"Input workspace type: {data_type.replace("Workspace", "Geodatabase")}")
+ws_type = data_type.replace("Workspace", "Geodatabase")
+log_it(f"Input workspace type: {ws_type}")
 # If datatype is a file gdb, get all feature datasets
 ar_found = []
 if data_type == "Workspace":
     fds_list = arcpy.ListDatasets(feature_type="Feature")
     for fds in fds_list:
         for fc in arcpy.ListFeatureClasses(feature_dataset=fds):
-            ar_found = delete_attribute_rules(fc, system_ar_names_list)
+            ar_found.append(delete_attribute_rules(fc, system_ar_names_list))
 
 # Get stand-alone feature classes and tables
 ds_list = arcpy.ListFeatureClasses() + arcpy.ListTables()
@@ -113,6 +116,7 @@ for ds in ds_list:
     ar_found.append(delete_attribute_rules(ds, system_ar_names_list))
 
 if True not in ar_found:
+    attr_rule_types_str = ", ".join(attr_rule_types)
     log_it(
-        f"Attribute rules of type {", ".join(attr_rule_types)} were not found on any datasets within the provided workspace"
+        f"Attribute rules of type {attr_rule_types_str} were not found on any datasets within the provided workspace"
     )

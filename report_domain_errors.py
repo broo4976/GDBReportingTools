@@ -239,7 +239,7 @@ for fds, ds_list in ds_dict.items():
                             where += f" AND {subtype_fld} = {subtype_code}"
 
                         # Handle fc vs table
-                        log_it(f"Finding count of invalid value: {val} where: {where}")
+                        # log_it(f"Finding count of invalid value: {val} where: {where}")
                         if arcpy.Describe(ds).dataType == "FeatureClass":
                             arcpy.management.MakeFeatureLayer(ds, "i", where)
                         else:

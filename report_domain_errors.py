@@ -172,6 +172,7 @@ for fds, ds_list in ds_dict.items():
             domain_type = domain.domainType
 
             # Get domain values/ranges
+            orig_val_dict = {}
             if domain_type == "CodedValue":
                 valid_values = tuple(domain.codedValues.keys())
                 # Check if any valid values contain a quote
@@ -212,7 +213,12 @@ for fds, ds_list in ds_dict.items():
                     ds, [fld_name], where, sql_clause=("DISTINCT", None)
                 ) as cur:
                     for row in cur:
-                        unique_list.append(row[0])
+                        if "'" in str(row[0]):
+                            new_val = row[0].replace("'", "''")
+                            unique_list.append(new_val)
+                            orig_val_dict[new_val] = row[0]
+                        else:
+                            unique_list.append(row[0])
                     log_it(f"Number of unique invalid values found: {len(unique_list)}")
                 # Update valid values to string so it can be added to excel
                 valid_values = tuple(domain.codedValues.keys())
@@ -221,6 +227,7 @@ for fds, ds_list in ds_dict.items():
                 if not unique_list:
                     continue
                 else:
+                    # log_it(unique_list)
                     # Get count of each invalid value
                     for val in unique_list:
                         # Handle string vs number
@@ -232,6 +239,7 @@ for fds, ds_list in ds_dict.items():
                             where += f" AND {subtype_fld} = {subtype_code}"
 
                         # Handle fc vs table
+                        log_it(f"Finding count of invalid value: {val} where: {where}")
                         if arcpy.Describe(ds).dataType == "FeatureClass":
                             arcpy.management.MakeFeatureLayer(ds, "i", where)
                         else:
@@ -243,7 +251,12 @@ for fds, ds_list in ds_dict.items():
                         if val == "":
                             invalid_list.append({"value": "<Empty>", "count": count})
                         else:
-                            invalid_list.append({"value": val, "count": count})
+                            if val in orig_val_dict.keys():
+                                invalid_list.append(
+                                    {"value": orig_val_dict[val], "count": count}
+                                )
+                            else:
+                                invalid_list.append({"value": val, "count": count})
 
             else:
                 min_range = domain.range[0]

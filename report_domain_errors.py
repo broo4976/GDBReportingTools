@@ -38,6 +38,7 @@ import os
 import openpyxl
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment
+import datetime
 
 # Overwrite existing output
 arcpy.env.overwriteOutput = 1
@@ -45,7 +46,9 @@ arcpy.env.overwriteOutput = 1
 
 def log_it(message):
     print(message)
-    arcpy.AddMessage(message)
+    now = datetime.datetime.now()
+    timestamp = now.strftime("%Y-%m-%d %H:%M:%S")
+    arcpy.AddMessage(f"[{timestamp}] {message}")
 
 
 def autofit_column_widths(ws, has_subtypes):
@@ -113,7 +116,7 @@ for fds, ds_list in ds_dict.items():
 
     # Loop through fcs in fds
     for ds in ds_list:
-        log_it(ds)
+        log_it(f"Dataset name: {ds}")
         name = fds + "/" + ds
         name = name.replace("stand_alone/", "")
         # Get feature count
@@ -171,20 +174,48 @@ for fds, ds_list in ds_dict.items():
             # Get domain values/ranges
             if domain_type == "CodedValue":
                 valid_values = tuple(domain.codedValues.keys())
-                if len(valid_values) == 1:
-                    where = f"{fld_name} <> {valid_values[0]}"
+                # Check if any valid values contain a quote
+                has_quote = any("'" in str(val) for val in valid_values)
+                if not has_quote:
+                    if len(valid_values) == 1:
+                        if fld_type == "String":
+                            where = f"{fld_name} <> '{valid_values[0]}'"
+                        else:
+                            where = f"{fld_name} <> {valid_values[0]}"
+                    else:
+                        where = f"{fld_name} NOT IN {valid_values}"
                 else:
-                    where = f"{fld_name} NOT IN {valid_values}"
+                    # Handle quotes
+                    valid_values = list(domain.codedValues.keys())
+                    problem_vals = []
+                    for val in valid_values:
+                        if "'" in str(val):
+                            problem_vals.append(val)
+
+                    for val in problem_vals:
+                        new_val = val.replace("'", "''")
+                        valid_values.remove(val)
+                        valid_values.append(new_val)
+                        where = f"{fld_name} NOT IN ("
+                        for val in valid_values:
+                            where += f"'{val}', "
+                        where = where[:-2]
+                        where += ")"
 
                 if has_subtypes:
                     where += f" AND {subtype_fld} = {subtype_code}"
                 unique_list = []
+                log_it(
+                    f"Finding unique invalid values in field: {fld_name} where: {where}"
+                )
                 with arcpy.da.SearchCursor(
                     ds, [fld_name], where, sql_clause=("DISTINCT", None)
                 ) as cur:
                     for row in cur:
                         unique_list.append(row[0])
+                    log_it(f"Number of unique invalid values found: {len(unique_list)}")
                 # Update valid values to string so it can be added to excel
+                valid_values = tuple(domain.codedValues.keys())
                 valid_values = ",".join(map(str, valid_values))
                 # If there are no invalid values, continue
                 if not unique_list:
@@ -213,6 +244,7 @@ for fds, ds_list in ds_dict.items():
                             invalid_list.append({"value": "<Empty>", "count": count})
                         else:
                             invalid_list.append({"value": val, "count": count})
+
             else:
                 min_range = domain.range[0]
                 max_range = domain.range[1]
